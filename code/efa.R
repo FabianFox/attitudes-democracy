@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
 xfun::pkg_attach2("tidyverse", "rio", "sjlabelled", "sjmisc", "Hmisc", "weights",
-                  "tidystringdist", "corrr", "hrbrthemes", "srvyr", "survey", 
+                  "tidystringdist", "corrr", "hrbrthemes", "srvyr", "survey", "gt",
                   "patchwork", "psych", "conflicted", "lubridate")
 
 conflict_prefer("filter", "dplyr")
@@ -178,16 +178,61 @@ cor.df <- pmap(vars, ~ wCorr::weightedCorr(ib22_cor.df[[..1]],
   retract(V1, V2, value) %>%
   relocate(dgg, .after = term) %>%
   as_cordf(diagonal = 0) %>%
-  rplot(print_cor = T)
+  shave() 
 
-# Create scree plots for each year
+# Correlation plot
+rplot(cor.df, print_cor = T, colours = viridisLite::plasma(3))
+
+# Create lookup
+lookup <- qst.df %>%
+  mutate(short_q = str_c(short_q, " (", item, ")")) %>%
+  pull(short_q) %>% 
+  set_names(qst.df$item)
+
+# Create correlation table
+cor.df %>%
+  mutate(term = recode(term, !!!lookup)) %>%
+  gt() %>%
+  fmt_number() %>%
+  fmt_missing(missing_text = "-") %>%
+  tab_header(title = "Korrelationsmatrix: Demokratie") %>%
+  tab_source_note("Anmerkung: Polychorische Korrelation; gewichtete Daten") %>%
+  tab_source_note("Quelle: SVR-Integrationsbarometer 2022") %>%
+  cols_label(term = "")
+
+# Factor analysis ----
 # ---------------------------------------------------------------------------- #
 # Scree plot
 scree_pol.df <- psych::fa.parallel(
   x = ib22_pol.df %>%
     select(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf), 
-  fm = "pa", fa = "fa", cor = "poly", n.iter = 500, SMC = TRUE, 
+  fm = "pa", fa = "fa", cor = "poly", n.iter = 100, SMC = TRUE, 
   quant = .95)
+
+# Plot
+scree_plot.df <- tibble(
+  type = "Beobachtete Daten",
+  nfact = scree_pol.df$nfact,
+  eigenvalue = scree_pol.df$fa.values) 
+
+# Simulated data
+scree_sim.df <- tibble(
+  type = "Simulierte Daten (95%-Quantile)",
+  nfact = scree_pol.df$nfact,
+  percentile = list(scree_pol.df$values %>% 
+    as_tibble() %>% 
+    select(starts_with("Fsim")) %>% 
+    summarise(across(everything(), ~quantile(.x, .95))) %>%
+    pivot_longer(cols = starts_with("Fsim"), 
+                 names_to = "num", 
+                 names_prefix = "Fsim", 
+                 values_to = "eigenvalue"))) %>%
+  unnest(percentile)
+
+# Join
+scree_plot.df <- scree_plot.df %>%
+  bind_rows(scree_sim.df)
+
 
 # EFA
 efa_pol <- psych::fa(
@@ -246,7 +291,7 @@ ib22_pol.df <- ib22_pol.df %>%
 # ---------------------------------------------------------------------------- #
 # Create tibble of variables to map across
 vars <- tibble(
-  q = names(ib22_pol.df)[c(3:16)],
+  q = names(ib22_pol.df)[c(4:17)],
   grp = "migra",
   w = "weight"
 )

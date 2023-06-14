@@ -4,7 +4,7 @@
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
-xfun::pkg_attach2("tidyverse", "rio", "Hmisc", "weights",
+xfun::pkg_attach2("tidyverse", "rio", "Hmisc", "weights", "sjlabelled",
                   "tidystringdist", "corrr", "hrbrthemes", "gt",
                   "psych", "conflicted", "lubridate", "here")
 

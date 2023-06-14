@@ -4,12 +4,13 @@
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
-xfun::pkg_attach2("tidyverse", "rio", "sjlabelled", "sjmisc", "Hmisc", "weights",
-                  "tidystringdist", "corrr", "hrbrthemes", "srvyr", "survey", "gt",
-                  "patchwork", "psych", "conflicted", "lubridate")
+xfun::pkg_attach2("tidyverse", "rio", "Hmisc", "weights",
+                  "tidystringdist", "corrr", "hrbrthemes", "gt",
+                  "psych", "conflicted", "lubridate", "here")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+conflict_prefer("expand", "tidyr")
 
 # Fonts
 extrafont::loadfonts()
@@ -190,7 +191,7 @@ lookup <- qst.df %>%
   set_names(qst.df$item)
 
 # Create correlation table
-cor.df %>%
+cor.tbl <- cor.df %>%
   mutate(term = recode(term, !!!lookup)) %>%
   gt() %>%
   fmt_number() %>%
@@ -200,9 +201,12 @@ cor.df %>%
   tab_source_note("Quelle: SVR-Integrationsbarometer 2022") %>%
   cols_label(term = "")
 
+# Export
+gtsave(cor.tbl, here("output", "Korrelationsmatrix.rtf"))
+
 # Factor analysis ----
-# ---------------------------------------------------------------------------- #
-# Scree plot
+# ------------------------------------------------------------------------------------------------ #
+## Scree plot ----
 scree_pol.df <- psych::fa.parallel(
   x = ib22_pol.df %>%
     select(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf), 
@@ -213,7 +217,8 @@ scree_pol.df <- psych::fa.parallel(
 scree_plot.df <- tibble(
   type = "Beobachtete Daten",
   nfact = scree_pol.df$nfact,
-  eigenvalue = scree_pol.df$fa.values) 
+  eigenvalue = scree_pol.df$fa.values) %>%
+  mutate(num = row_number())
 
 # Simulated data
 scree_sim.df <- tibble(
@@ -227,19 +232,83 @@ scree_sim.df <- tibble(
                  names_to = "num", 
                  names_prefix = "Fsim", 
                  values_to = "eigenvalue"))) %>%
-  unnest(percentile)
+  unnest(percentile) %>%
+  mutate(num = strtoi(num))
 
 # Join
 scree_plot.df <- scree_plot.df %>%
   bind_rows(scree_sim.df)
 
+# Plot
+scree_plot.fig <- ggplot(scree_plot.df, aes(x = num, y = eigenvalue, shape = type)) +
+  geom_line() +
+  geom_point(size = 4) +
+  scale_y_continuous(name = "Eigenwert") +
+  scale_x_continuous(name = "Faktor", breaks = min(scree_plot.df$num):max(scree_plot.df$num)) +
+  scale_shape_manual(values = c(16, 1)) +
+  geom_vline(xintercept = scree_plot.df$nfact, linetype = "dashed") +
+  labs(title = "Screeplot mit Parallelanalyse",
+       caption = "Quelle: SVR-Integrationsbarometer 2022") +
+  cowplot::theme_minimal_grid(font_size = 16) +
+  theme(legend.title = element_blank(), legend.position = "bottom", 
+        panel.spacing = unit(1, "cm"), plot.caption = element_text(hjust = 0))
 
-# EFA
-efa_pol <- psych::fa(
-  ib22_pol.df %>%
-    select(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf),
-  nfactors = 6, alpha = .05, rotate = "promax", 
-  fm = "ml", cor = "poly", SMC = FALSE, n.iter = 100)
+## EFA ----
+efa.df <- ib22_pol.df %>%
+  select(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf) %>% 
+  drop_na() %>%
+  rename_with(~recode(., !!!lookup)) %>%
+  nest() %>%
+  expand(nesting(.), factors = 1:10)
+
+# Run FAs
+set.seed(2710)
+efa.df <- efa.df %>%
+  mutate(efa_result = map2(.x = data, .y = factors, ~fa(
+           .x, nfactors = .y, alpha = .05, fm = "ml", cor = "poly", SMC = FALSE, rotate = "promax",
+           n.iter = 100)))
+
+# Add fit indices
+efa.df <- efa.df %>%
+  mutate(rmsea = map(efa_result, "RMSEA"),
+         bic = map(efa_result, "BIC"),
+         rmsea = map(rmsea, ~bind_rows(.x))) 
+
+# Output: RMSEA and BIC
+fit.df <- efa.df %>%
+  select(factors, rmsea, bic) %>%
+  unnest(c(rmsea, bic)) %>% 
+  mutate(across(where(is.numeric), ~round(.x, 2)),
+         `95%-Konfidenzintervall` = str_c(lower, upper, sep = ", ")) %>%
+  select(Faktoren = factors, RMSEA, `95%-Konfidenzintervall`, BIC = bic)
+
+# Table of factor loadings
+# ------------------------------------------------------------------------------------------------ #
+# gt-tables also available from:
+# https://github.com/franciscowilhelm/r-collection/blob/master/fa_table.R
+# initial implementation: https://www.anthonyschmidt.co/post/2020-09-27-efa-tables-in-r/
+
+# Load function
+source(here("code", "fa-table.R"))
+
+# Map across EFAs
+efa.df <- efa.df %>%
+  mutate(
+    tables = pmap(list(efa_result, factors), 
+                       ~fa_table(..1, title = str_c("Factor analysis (", 
+                                                    ..2, " factors)"),
+                                 diffuse = 0, sort = FALSE) %>%
+                    tab_source_note("Anmerkung: Polychorische Korrelation; gewichtete Daten") %>%
+                    tab_source_note("Quelle: SVR-Integrationsbarometer 2022"))
+    )
+
+# Save tables for further inspection
+# Saved as .rtf then copied and combined in Word
+efa.df %>%
+  select(tables, factors) %>%
+  filter(factors == 6) %>%
+  pmap(., ~gtsave(..1, filename = str_c("./output/", "FactorAnalysis_", 
+                                        ..2, ".rtf")))
 
 # Path diagram
 psych::fa.diagram(efa_pol)
@@ -253,7 +322,7 @@ psych::fa.diagram(efa_pol)
 # 6: dpu: vielfältige Parteienlandschaft
 
 # Cronbach's alpha (items determined by EFA)
-scales.df <- tibble(
+scales_fa.df <- tibble(
   fairness = "dgg$|dwf$|dgb$|drm$",
   responsiveness = "dwb$|dop$|dmp$",
   freespeech = "dlp$|dmf$|drp$",
@@ -270,7 +339,7 @@ scales.df <- tibble(
 
 # Get alphas
 alpha_raw <- 
-  map_df(scales.df, ~ 
+  map_df(scales_fa.df, ~ 
            ib22_pol.df %>% 
            select(matches(.x)) %>% 
            psych::alpha(check.keys = TRUE) %>%
@@ -393,3 +462,10 @@ party_diff.fig <- ib22_prob.df %>%
         axis.line = element_line(colour = "black"),
         axis.ticks.x = element_line(colour = "black", size = 0.5),
         axis.ticks.y = element_line(colour = "black", size = 0.5))
+
+# Export ----
+library(Cairo)
+ggsave(plot = scree_plot.fig, here("figure", "Parallelanalyse.pdf"),
+       device = cairo_pdf, dpi = 300)
+
+export(fit.df, "./output/Modelfit.csv", sep = ";")

@@ -4,8 +4,8 @@
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
-xfun::pkg_attach2("tidyverse", "rio", "Hmisc", "weights", "sjlabelled",
-                  "conflicted", "lubridate", "here", "democracyData")
+xfun::pkg_attach2("tidyverse", "rio", "sjlabelled", "countrycode",
+                  "conflicted", "lubridate", "here", "vdemdata")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -74,22 +74,42 @@ ib22_pol.df <- ib22.df %>%
          age, age_cat, gender, educ, income, lang_skill = pms2,
          state, region,
          mig_gen = geb,
-         stay_length,
+         stay_length, wandjahr,
          ger_citizen,
-         d1_1, d1_2, d1_3, d1_other, gebland) %>%
-  mutate(across(c(starts_with("d"), "lang_skill", "stay_length"), 
-                ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
-         # Dichotomize democ items
-         across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
-                  dlp, dmf), ~case_when(
-                    .x %in% c(0, 1) ~ 0,
-                    .x %in% c(2, 3) ~ 1,
-                    TRUE ~ NA_real_),
-                .names = "{.col}_bin"))
+         d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst) %>%
+  mutate(
+    gebland_chr = as_character(gebland),
+    gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
+    gebland_chr = str_squish(gebland_chr),
+    across(c(starts_with("d"), "lang_skill", "stay_length"), 
+           ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
+    # Dichotomize democ items
+    across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
+             dlp, dmf), ~case_when(
+               .x %in% c(0, 1) ~ 0,
+               .x %in% c(2, 3) ~ 1,
+               TRUE ~ NA_real_),
+           .names = "{.col}_bin"))
 
-# Download polity5
-p5.df <- download_polity_annual()
-export(p5.df, here("data", "polity5.rds"))
+# Download V-Dem
+vdem.df <- vdem %>%
+  tibble() %>%
+  select(country_text_id, year, v2x_polyarchy) # Example
+
+# Add democracy index in country-of-origin at year of immigration to respondents (only first generation)
+# (1) country-of-origin string to iso3c
+ib22_pol.df <- ib22_pol.df %>%
+  mutate(iso3c = countrycode(gebland_chr, "country.name.de", "iso3c",
+                             custom_match = c("Aegypten" = "EGY", "Kosovo" = "XKX", 
+                                              "Moldawien" = "MDA", "Oesterreich" = "AUT", 
+                                              "Rumaenien" = "ROU", "Simbawe" = "ZWE", 
+                                              "Suedafrika" = "ZAF", "Tschetschenien" = "RUS",
+                                              "Tuerkei" = "TUR")))
+
+# Join
+ib22_fb.df <- ib22_pol.df %>%
+  filter(iso3c != "DEU") %>%
+  left_join(y = vdem.df, by = c("wandjahr" = "year", "iso3c" = "country_text_id"))
 
 # Export
-export(ib22_pol.df, here("data", "ib22_pol.rds"))
+# export(ib22_pol.df, here("data", "ib22_pol.rds"))

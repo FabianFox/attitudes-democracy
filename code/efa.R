@@ -15,23 +15,6 @@ conflict_prefer("expand", "tidyr")
 # Fonts
 extrafont::loadfonts()
 
-# Functions
-# Weighted 95%-conf
-# from: https://stackoverflow.com/questions/37973240/how-to-create-a-confidence-interval-for-a-weighted-average-of-areas-under-the-ro
-weighted.ttest.ci <- function(x, weights, conf.level = 0.95) {
-  require(Hmisc)
-  nx <- length(x)
-  df <- nx - 1
-  vx <- wtd.var(x, weights, normwt = FALSE) ## From Hmisc
-  mx <- weighted.mean(x, weights, na.rm = TRUE)
-  stderr <- sqrt(vx/nx)
-  tstat <- mx/stderr ## not mx - mu
-  alpha <- 1 - conf.level
-  cint <- qt(1 - alpha/2, df)
-  cint <- tstat + c(-cint, cint)
-  cint * stderr
-}
-
 # Load data ----
 # ------------------------------------------------------------------------------------------------ #
 ib22_pol.df <- import(here("data", "ib22_pol.rds"))

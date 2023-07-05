@@ -1,6 +1,6 @@
 # Create data ----
 
-# Setup ----
+## Setup ----
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
@@ -14,6 +14,7 @@ conflict_prefer("select", "dplyr")
 ib22.df <- tibble(import("/Users/fguelzau/Documents/project/svr/data/Integrationsbarometer/IB2022/IB_22_Final_220823.dta", 
                          encoding = "latin1"))
 
+## Data wrangling ----
 # Select variables
 ib22_pol.df <- ib22.df %>%
   mutate(
@@ -72,6 +73,8 @@ ib22_pol.df <- ib22.df %>%
          # Democracy items
          dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf,
          age, age_cat, gender, educ, income, lang_skill = pms2,
+         religion = d16,
+         religion_str = d17,
          state, region,
          mig_gen = geb,
          stay_length, wandjahr,
@@ -81,7 +84,8 @@ ib22_pol.df <- ib22.df %>%
     gebland_chr = as_character(gebland),
     gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
     gebland_chr = str_squish(gebland_chr),
-    across(c(starts_with("d"), "lang_skill", "stay_length"), 
+    across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
+             dlp, dmf, lang_skill, stay_length, wandjahr, religion, religion_str), 
            ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
     # Dichotomize democ items
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
@@ -91,6 +95,7 @@ ib22_pol.df <- ib22.df %>%
                TRUE ~ NA_real_),
            .names = "{.col}_bin"))
 
+## Add V-Dem ----
 # Download V-Dem
 vdem.df <- vdem %>%
   tibble() %>%
@@ -106,10 +111,42 @@ ib22_pol.df <- ib22_pol.df %>%
                                               "Suedafrika" = "ZAF", "Tschetschenien" = "RUS",
                                               "Tuerkei" = "TUR")))
 
+# IB uses current sovereignty as country-of-birth (i.e. Georgia not USSR-Russia)
+# Replace with former empire to join vdem-score
+ib22_pol.df <- ib22_pol.df %>%
+  mutate(iso3c = case_when(
+    # former USSR 
+    iso3c == "ARM" & between(wandjahr, 1922, 1989) ~ "RUS", # pre 1918 Ottoman Empire but no cases in IB
+    iso3c == "AZE" & between(wandjahr, 1900, 1989) ~ "RUS",
+    iso3c == "GEO" & between(wandjahr, 1900, 1989) ~ "RUS",
+    iso3c == "KAZ" & between(wandjahr, 1900, 1990) ~ "RUS",
+    iso3c == "KGZ" & between(wandjahr, 1900, 1989) ~ "RUS",
+    iso3c == "TJK" & between(wandjahr, 1900, 1989) ~ "RUS",
+    iso3c == "TKM" & between(wandjahr, 1900, 1989) ~ "RUS",
+    iso3c == "UZB" & between(wandjahr, 1900, 1989) ~ "RUS",
+    # Bulgaria, Romania, Czechia, Hungary, Poland are coded throughout USSR period
+    iso3c == "BLR" & between(wandjahr, 1921, 1989) ~ "RUS",
+    iso3c == "EST" & between(wandjahr, 1940, 1989) ~ "RUS",
+    iso3c == "LVA" & between(wandjahr, 1940, 1989) ~ "RUS",
+    iso3c == "LTU" & between(wandjahr, 1940, 1989) ~ "RUS",
+    iso3c == "MDA" & between(wandjahr, 1940, 1989) ~ "RUS",
+    iso3c == "UKR" & between(wandjahr, 1941, 1989) ~ "RUS",
+    # former Yugoslavia
+    iso3c == "BIH" & between(wandjahr, 1945, 1991) ~ "SRB",
+    iso3c == "XKX" & between(wandjahr, 1944, 1998) ~ "SRB",
+    iso3c == "MKD" & between(wandjahr, 1912, 1990) ~ "SRB",
+    iso3c == "MNE" & between(wandjahr, 1919, 1990) ~ "SRB",
+    iso3c == "HRV" & between(wandjahr, 1945, 1990) ~ "SRB",
+    iso3c == "SVN" & between(wandjahr, 1945, 1988) ~ "SRB",
+    
+    .default = iso3c
+  ))
+
 # Join
 ib22_fb.df <- ib22_pol.df %>%
   filter(iso3c != "DEU") %>%
   left_join(y = vdem.df, by = c("wandjahr" = "year", "iso3c" = "country_text_id"))
 
-# Export
-# export(ib22_pol.df, here("data", "ib22_pol.rds"))
+## Export ----
+export(ib22_fb.df, here("data", "ib22_fbpol.rds"))
+export(ib22_pol.df, here("data", "ib22_pol.rds"))

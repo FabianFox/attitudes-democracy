@@ -79,7 +79,7 @@ fig <- modelplot(mod, colour = "black",
 # MLM ----
 ### Baseline model ----
 # Model: baseline
-v0.mod <- blme::blmer(dgg ~ 1 + (1 | iso3c), 
+v0.mod <- lmerTest::lmer(dgg ~ 1 + v2x_polyarchy + (1 | iso3c), 
                       ib22_pol.df)
 
 ### Variance components ----

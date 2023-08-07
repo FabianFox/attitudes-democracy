@@ -99,7 +99,7 @@ ib22_pol.df <- ib22.df %>%
 # Download V-Dem
 vdem.df <- vdem %>%
   tibble() %>%
-  select(country_text_id, year, v2x_polyarchy) # Example
+  select(country_text_id, year, v2x_polyarchy, v2x_libdem, v2x_partipdem) 
 
 # Add democracy index in country-of-origin at year of immigration to respondents (only first generation)
 # (1) country-of-origin string to iso3c

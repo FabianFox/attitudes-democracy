@@ -23,6 +23,10 @@ ib22_pol.df <- import(here("data", "ib22_fbpol.rds"))
 # Create factor variables
 ib22_pol.df <- ib22_pol.df %>%
   mutate(
+    muslim = case_when(
+      religion == 2 ~ 1,
+      religion %in% c(1, 3, 4) ~ 0,
+      TRUE ~ NA_integer_),
     religion = case_when(
       religion == 1 ~ "Christian",
       religion == 2 ~ "Muslim",
@@ -31,9 +35,13 @@ ib22_pol.df <- ib22_pol.df %>%
       TRUE ~ NA_character_),
     religion = factor(religion))
 
+# Add mean score of independent variables
+ib22_pol.df <- ib22_pol.df %>%
+  mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), na.rm = TRUE))
+
 # FE model ----
 # for country-of-origin (dummy)
-mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra) ~ gender + age + I(age^2) + educ +
+mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + age + I(age^2) + educ +
                        religion + v2x_polyarchy + stay_length
                    | iso3c,
                    data = ib22_pol.df) 
@@ -79,12 +87,20 @@ fig <- modelplot(mod, colour = "black",
 # MLM ----
 ### Baseline model ----
 # Model: baseline
-v0.mod <- lmerTest::lmer(dgg ~ 1 + v2x_polyarchy + (1 | iso3c), 
+v0.mod <- lmerTest::lmer(demo ~ 1 + v2x_polyarchy + (1 | iso3c), 
                       ib22_pol.df)
 
 ### Variance components ----
 # Variance on land/year-level
 performance::icc(v0.mod)
+
+# 
+v1.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + v2x_polyarchy + (1 | iso3c),
+                         data = ib22_pol.df)
+
+v1_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + v2x_polyarchy + (1 | iso3c),
+                           weights = weight,
+                         data = ib22_pol.df)
 
 # 
 ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf, 

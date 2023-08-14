@@ -72,20 +72,26 @@ ib22_pol.df <- ib22.df %>%
          weight = weight_dg2,
          # Democracy items
          dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf,
+         # Individual variables
          age, age_cat, gender, educ, income, lang_skill = pms2,
          religion = d16,
          religion_str = d17,
+         # Region
          state, region,
+         # Migration
          mig_gen = geb,
          stay_length, wandjahr,
          ger_citizen,
-         d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst) %>%
+         d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst,
+         # Transnational contacts
+         fh, fhk, fa, fak, fa2_1, fa2_2, fa2_other) %>%
   mutate(
     gebland_chr = as_character(gebland),
     gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
     gebland_chr = str_squish(gebland_chr),
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
-             dlp, dmf, lang_skill, stay_length, wandjahr, religion, religion_str), 
+             dlp, dmf, lang_skill, stay_length, wandjahr, religion, religion_str,
+             fh, fhk, fa, fak), 
            ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
     # Dichotomize democ items
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
@@ -93,7 +99,8 @@ ib22_pol.df <- ib22.df %>%
                .x %in% c(0, 1) ~ 0,
                .x %in% c(2, 3) ~ 1,
                TRUE ~ NA_real_),
-           .names = "{.col}_bin"))
+           .names = "{.col}_bin"),
+    across(c("fh", "fa"), ~if_else(.x == 2, 0, .x)))
 
 ## Add V-Dem ----
 # Download V-Dem
@@ -148,5 +155,7 @@ ib22_fb.df <- ib22_pol.df %>%
   left_join(y = vdem.df, by = c("wandjahr" = "year", "iso3c" = "country_text_id"))
 
 ## Export ----
+# Only foreign born
 export(ib22_fb.df, here("data", "ib22_fbpol.rds"))
+# All respondents
 export(ib22_pol.df, here("data", "ib22_pol.rds"))

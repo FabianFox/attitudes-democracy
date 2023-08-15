@@ -1,11 +1,11 @@
-# Exploratory factor analysis ----
+# Analysis ----
 
 # Setup ----
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
 xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary",
-                  "conflicted", "lubridate", "here", "Cairo", "Hmisc")
+                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -56,8 +56,8 @@ mean.df <- ib_nest.df %>%
   mutate(
     mig_type = case_when(
       migra == 1 ~ "natives",
-      migra != 1 & gebland != 1 ~ "first generation",
-      migra != 1 & gebland == 1 ~ "second generation",
+      migra != 1 & iso3c != "DEU" ~ "first generation",
+      migra != 1 & iso3c == "DEU" ~ "second generation",
       TRUE ~ NA_character_)) %>%
   filter(if_all(c(democ, mig_type, weight), ~!is.na(.))) %>%
   group_by(mig_type) %>%
@@ -73,6 +73,34 @@ mean.df <- ib_nest.df %>%
                                    conf.level = 0.95)[2],
     n = n()) %>% 
   ungroup() 
+
+# Table 
+mean.tbl <- mean.df %>%
+  mutate(
+    across(starts_with("conf"), ~format(round(., 2), nsmall = 2)),
+    "95%CI" = str_c("[", conf.low, ", ", conf.high, "]"),
+    mig_type = factor(mig_type, 
+                      levels = c("natives", "first generation", "second generation"),
+                      labels = c("Natives", "First Generation", "Second Generation"))) %>%
+  select(-starts_with("conf")) %>%
+  arrange(mig_type) %>%
+  gt() %>%
+  fmt_number(columns = c("mean", "95%CI"),
+             decimals = 2) %>%
+  cols_align(
+    align = "left",
+    columns = "mig_type") %>%
+  cols_align_decimal() %>%
+  cols_label(
+    mig_type = "",
+    mean = "Mean",
+    `95%CI` = "95%-CI",
+    n = "N") %>%
+  tab_header(title = md("Importance of democracy")) %>%
+  tab_source_note(source_note = md("**Source**: SVR-Integrationsbarometer 2022; weighted")) %>%
+  tab_spanner(label = "Index",
+              columns = c("mean", "95%CI")) %>%
+  tab_spanner(label = "95")  
 
 # Create factor variables
 ib22_fb.df <- ib_nest.df %>%
@@ -118,10 +146,10 @@ fig <- modelplot(mod, colour = "black",
   geom_vline(xintercept = 0, color = 'orange') + 
   facet_grid(~factor(model,
                      levels = c("lhs: dwf", "lhs: dpu", "lhs: dmk", "lhs: drm", "lhs: dgg", "lhs: dme",
-                                "lhs: dra"),
+                                "lhs: dra", "lhs: democ"),
                      labels = c("Elections free and\nfair", "Parties clear\nalternatives", "Media free to\ncriticize",
                                 "Minority rights\nprotected", "Courts same treat-\nment", "Balance inequalities\nby taxation",
-                                "Protection against\npoverty"))) +
+                                "Protection against\npoverty", "Index"))) +
   labs(title = "Linear regression: Democracy", 
        subtitle = "Only foreign born",
        caption = "Includes dummy variables for country-of-origin (not shown); clustered standard errors") +
@@ -138,44 +166,67 @@ fig <- modelplot(mod, colour = "black",
         axis.text.x = element_text(family = "Verdana", size = 11, color = "black"))
 
 # Hierachical model ----
+### Rescale weights 
+ib22_fb.df <- datawizard::rescale_weights(ib22_fb.df %>% 
+                                            filter(if_all(c(iso3c, weight), 
+                                                          ~!is.na(.))), 
+                                          group = "iso3c", 
+                                          probability_weights = "weight")
+
 ### Baseline model ----
 # Model: baseline (null model)
-v0.mod <- lmerTest::lmer(democ ~ v2x_polyarchy + (1 | iso3c), 
-                      data = ib22_fb.df)
+v0_w.mod <- lmerTest::lmer(democ ~ 1 + (1 | iso3c), 
+                      weights = pweights_a, data = ib22_fb.df)
 
 ### Variance components ----
 # ICC
-performance::icc(v0.mod)
+performance::icc(v0_w.mod)
 
 # M1
-v1.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + v2x_polyarchy + (1 | iso3c),
-                         data = ib22_fb.df)
-
 # M1 with weights
 v1_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + v2x_polyarchy + (1 | iso3c),
-                           weights = weight,
+                           weights = pweights_a,
                          data = ib22_fb.df)
 
 # M2
 # Transnational contacts
 v2_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + fh + v2x_polyarchy + 
                            (1 | iso3c),
-                         weights = weight,
+                         weights = pweights_a,
                          data = ib22_fb.df)
 
 # modelsummary
-modelsummary(list("MLM" = v1_w.mod), estimate = "{estimate}{stars}",
+mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
+             list("Unconditional" = v0_w.mod,
+                  "Base" = v1_w.mod,
+                  "Full" = v2_w.mod),
+             stars = TRUE,
              coef_map = c("(Intercept)" = "Intercept",
                           "stay_length" = "Period of residence (years)",
                           "muslim" = "Muslim",
                           "religion_str" = "Religiosity",
-                          "v2x_polyarchy" = "Polyarchy (VDem)"),
+                          "v2x_polyarchy" = "Polyarchy (VDem)",
+                          "fh" = "Contacts to country-of-origin",
+                          "SD (Intercept iso3c)" = "SD (Intercept: Country)",
+                          "SD (Observations)" = "SD (Observations)"),
              gof_map = tribble(
                ~raw, ~clean, ~fmt,
                "nobs", "N", 0,
+               "r2,marginal", "R2 Marg.", 3,
+               "r2.conditional", "R2 Cond.", 3,
+               "aic", "AIC", 0,
+               "bic", "BIC", 0,
                "icc", "ICC", 2,
-               "aic", "AIC", 0)) 
+               "rmse", "RMSE", 2)) %>%
+  tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
 
-# 
+# Export
 ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf, 
        width = 34, height = 24, units = "cm")
+
+# Mean democ index
+gtsave(mean.tbl, filename = "./figure/mean_democ.png")
+
+# MLM results
+gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
+

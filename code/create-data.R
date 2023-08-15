@@ -32,7 +32,6 @@ ib22_pol.df <- ib22.df %>%
                   levels = c(1:4), 
                   labels = c("niedrig", "mittel", "hoch", "Schüler")),
     income = if_else(d20 %in% c(97, 98), NA_real_, d20),
-    stay_length = year(ymd(a_datum)) - wandjahr,
     ger_citizen = case_when(
       d1_1 == 1 | d1_2 == 1 | d1_3 == 1 ~ 1,
       TRUE ~ 0),
@@ -68,7 +67,7 @@ ib22_pol.df <- ib22.df %>%
                    "Sachsen", "Thüringen") ~ "Ostdeutschland",
       state %in% c("Hamburg", "Berlin", "Bremen") ~ "Stadtstaaten",
       TRUE ~ NA_character_)) %>%
-  select(a_recno, migra, 
+  select(a_recno, a_datum, migra, 
          weight = weight_dg2,
          # Democracy items
          dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf,
@@ -80,7 +79,7 @@ ib22_pol.df <- ib22.df %>%
          state, region,
          # Migration
          mig_gen = geb,
-         stay_length, wandjahr,
+         wandjahr,
          ger_citizen,
          d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst,
          # Transnational contacts
@@ -90,8 +89,8 @@ ib22_pol.df <- ib22.df %>%
     gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
     gebland_chr = str_squish(gebland_chr),
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
-             dlp, dmf, lang_skill, stay_length, wandjahr, religion, religion_str,
-             fh, fhk, fa, fak), 
+             dlp, dmf, lang_skill, wandjahr, religion, religion_str,
+             fh, fhk, fa, fak, wandjahr), 
            ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
     # Dichotomize democ items
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
@@ -100,7 +99,8 @@ ib22_pol.df <- ib22.df %>%
                .x %in% c(2, 3) ~ 1,
                TRUE ~ NA_real_),
            .names = "{.col}_bin"),
-    across(c("fh", "fa"), ~if_else(.x == 2, 0, .x)))
+    across(c("fh", "fa"), ~if_else(.x == 2, 0, .x)),
+    stay_length = year(ymd(a_datum)) - wandjahr)
 
 ## Add V-Dem ----
 # Download V-Dem

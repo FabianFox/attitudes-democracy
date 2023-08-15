@@ -195,18 +195,43 @@ v2_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + fh + v2
                          weights = pweights_a,
                          data = ib22_fb.df)
 
+# M3A: Interactions (muslim x religion_str)
+v3_w1.mod <- lmerTest::lmer(democ ~ stay_length + muslim*religion_str + fh + v2x_polyarchy + 
+                             (1 | iso3c),
+                           weights = pweights_a,
+                           data = ib22_fb.df)
+
+# M3B: Interactions (+ contact x vdem)
+v3_w2.mod <- lmerTest::lmer(democ ~ stay_length + muslim*religion_str + fh*v2x_polyarchy + 
+                             (1 | iso3c),
+                           weights = pweights_a,
+                           data = ib22_fb.df)
+
+# M3C: Interactions (+ stay_length x vdem)
+v3_w3.mod <- lmerTest::lmer(democ ~ muslim*religion_str + stay_length*v2x_polyarchy + fh*v2x_polyarchy +
+                              (1 | iso3c),
+                            weights = pweights_a,
+                            data = ib22_fb.df)
+
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
              list("Unconditional" = v0_w.mod,
                   "Base" = v1_w.mod,
-                  "Full" = v2_w.mod),
+                  "Full" = v2_w.mod,
+                  "Muslim × Religiosity" = v3_w1.mod,
+                  "Family × VDem" = v3_w2.mod,
+                  "Residence × VDem" = v3_w3.mod),
              stars = TRUE,
              coef_map = c("(Intercept)" = "Intercept",
                           "stay_length" = "Period of residence (years)",
                           "muslim" = "Muslim",
                           "religion_str" = "Religiosity",
                           "v2x_polyarchy" = "Polyarchy (VDem)",
-                          "fh" = "Contacts to country-of-origin",
+                          "fh" = "Close family (country-of-origin)",
+                          "muslim:religion_str" = "Muslim × Religiosity",
+                          "fh:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
+                          "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
+                          "stay_length:v2x_polyarchy" = "Period of residence × Polyarchy (VDem)",
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
                           "SD (Observations)" = "SD (Observations)"),
              gof_map = tribble(

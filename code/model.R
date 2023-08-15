@@ -229,4 +229,3 @@ gtsave(mean.tbl, filename = "./figure/mean_democ.png")
 
 # MLM results
 gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
-

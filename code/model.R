@@ -10,6 +10,7 @@ xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary",
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 conflict_prefer("expand", "tidyr")
+conflict_prefer("summarize", "dplyr")
 
 # Fonts
 extrafont::loadfonts()
@@ -59,7 +60,10 @@ mean.df <- ib_nest.df %>%
       migra != 1 & iso3c != "DEU" ~ "first generation",
       migra != 1 & iso3c == "DEU" ~ "second generation",
       TRUE ~ NA_character_)) %>%
-  filter(if_all(c(democ, mig_type, weight), ~!is.na(.))) %>%
+  filter(if_all(c(democ, mig_type, weight), ~!is.na(.)))
+
+# Get mean
+mean.tbl <- mean.df %>%
   group_by(mig_type) %>%
   summarise(
     mean = wtd.mean(democ, 
@@ -72,10 +76,13 @@ mean.df <- ib_nest.df %>%
                                    weights = weight, 
                                    conf.level = 0.95)[2],
     n = n()) %>% 
-  ungroup() 
+  ungroup() %>%
+  left_join(y = mean.df %>% 
+              group_by(mig_type) %>%
+              summarize(data = list(democ), .groups = "drop"), by = "mig_type")
 
 # Table 
-mean.tbl <- mean.df %>%
+mean.gt <- mean.tbl %>%
   mutate(
     across(starts_with("conf"), ~format(round(., 2), nsmall = 2)),
     "95%CI" = str_c("[", conf.low, ", ", conf.high, "]"),
@@ -85,6 +92,7 @@ mean.tbl <- mean.df %>%
   select(-starts_with("conf")) %>%
   arrange(mig_type) %>%
   gt() %>%
+  gt_plt_dist(data, type = "histogram") %>%
   fmt_number(columns = c("mean", "95%CI"),
              decimals = 2) %>%
   cols_align(

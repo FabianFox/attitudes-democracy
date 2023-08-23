@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
 xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary",
-                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt")
+                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -135,6 +135,10 @@ mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + age 
                    | iso3c,
                    data = ib22_fb.df) 
 
+### Table ----
+mod %>%
+  modelsummary()
+
 ### Plot ----
 fig <- modelplot(mod, colour = "black", 
                  coef_map =
@@ -192,31 +196,32 @@ performance::icc(v0_w.mod)
 
 # M1
 # M1 with weights
-v1_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + v2x_polyarchy + (1 | iso3c),
+v1_w.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim + religion_str + 
+                             v2x_polyarchy + (1 | iso3c),
                            weights = pweights_a,
                          data = ib22_fb.df)
 
 # M2
 # Transnational contacts
-v2_w.mod <- lmerTest::lmer(democ ~ stay_length + muslim + religion_str + fh + v2x_polyarchy + 
+v2_w.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim + religion_str + fh + v2x_polyarchy + 
                            (1 | iso3c),
                          weights = pweights_a,
                          data = ib22_fb.df)
 
 # M3A: Interactions (muslim x religion_str)
-v3_w1.mod <- lmerTest::lmer(democ ~ stay_length + muslim*religion_str + fh + v2x_polyarchy + 
+v3_w1.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim*religion_str + fh + v2x_polyarchy + 
                              (1 | iso3c),
                            weights = pweights_a,
                            data = ib22_fb.df)
 
 # M3B: Interactions (+ contact x vdem)
-v3_w2.mod <- lmerTest::lmer(democ ~ stay_length + muslim*religion_str + fh*v2x_polyarchy + 
+v3_w2.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim*religion_str + fh*v2x_polyarchy + 
                              (1 | iso3c),
                            weights = pweights_a,
                            data = ib22_fb.df)
 
 # M3C: Interactions (+ stay_length x vdem)
-v3_w3.mod <- lmerTest::lmer(democ ~ muslim*religion_str + stay_length*v2x_polyarchy + fh*v2x_polyarchy +
+v3_w3.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + muslim*religion_str + stay_length*v2x_polyarchy + fh*v2x_polyarchy +
                               (1 | iso3c),
                             weights = pweights_a,
                             data = ib22_fb.df)

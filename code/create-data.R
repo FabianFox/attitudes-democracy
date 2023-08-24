@@ -16,7 +16,7 @@ ib22.df <- tibble(import("/Users/fguelzau/Documents/project/svr/data/Integration
 
 ## Data wrangling ----
 # Select variables
-ib22_pol.df <- ib22.df %>%
+ib22_democ.df <- ib22.df %>%
   mutate(
     age = alter,
     age_cat = case_when(
@@ -110,7 +110,7 @@ vdem.df <- vdem %>%
 
 # Add democracy index in country-of-origin at year of immigration to respondents (only first generation)
 # (1) country-of-origin string to iso3c
-ib22_pol.df <- ib22_pol.df %>%
+ib22_democ.df <- ib22_democ.df %>%
   mutate(iso3c = countrycode(gebland_chr, "country.name.de", "iso3c",
                              custom_match = c("Aegypten" = "EGY", "Kosovo" = "XKX", 
                                               "Moldawien" = "MDA", "Oesterreich" = "AUT", 
@@ -118,9 +118,11 @@ ib22_pol.df <- ib22_pol.df %>%
                                               "Suedafrika" = "ZAF", "Tschetschenien" = "RUS",
                                               "Tuerkei" = "TUR")))
 
-# IB uses current sovereignty as country-of-birth (i.e. Georgia not USSR-Russia)
-# Replace with former empire to join vdem-score
-ib22_pol.df <- ib22_pol.df %>%
+# Join
+  # IB uses current sovereignty as country-of-birth (i.e. Georgia not USSR-Russia)
+  # Replace with former empire to join vdem-score
+# VDem at year of immigration
+ib22_fborn.df <- ib22_democ.df %>%
   mutate(iso3c = case_when(
     # former USSR 
     iso3c == "ARM" & between(wandjahr, 1922, 1989) ~ "RUS", # pre 1918 Ottoman Empire but no cases in IB
@@ -145,17 +147,54 @@ ib22_pol.df <- ib22_pol.df %>%
     iso3c == "MNE" & between(wandjahr, 1919, 1990) ~ "SRB",
     iso3c == "HRV" & between(wandjahr, 1945, 1990) ~ "SRB",
     iso3c == "SVN" & between(wandjahr, 1945, 1988) ~ "SRB",
-    
-    .default = iso3c
-  ))
-
-# Join
-ib22_fb.df <- ib22_pol.df %>%
+    .default = iso3c)) %>%
   filter(iso3c != "DEU") %>%
   left_join(y = vdem.df, by = c("wandjahr" = "year", "iso3c" = "country_text_id"))
 
+# VDem at formative year (age: 14 years)
+ib22_fyear.df <- ib22_democ.df %>%
+  mutate(formative_year = year(ymd(a_datum)) - age + 14,
+         formative_before_mig = case_when(
+           formative_year - wandjahr > 0 ~ "no",
+           formative_year - wandjahr <= 0 ~ "yes",
+           TRUE ~ NA_character_),
+         iso3c = case_when(
+           # former USSR 
+           iso3c == "ARM" & between(formative_year, 1922, 1989) ~ "RUS", # pre 1918 Ottoman Empire but no cases in IB
+           iso3c == "AZE" & between(formative_year, 1900, 1989) ~ "RUS",
+           iso3c == "GEO" & between(formative_year, 1900, 1989) ~ "RUS",
+           iso3c == "KAZ" & between(formative_year, 1900, 1990) ~ "RUS",
+           iso3c == "KGZ" & between(formative_year, 1900, 1989) ~ "RUS",
+           iso3c == "TJK" & between(formative_year, 1900, 1989) ~ "RUS",
+           iso3c == "TKM" & between(formative_year, 1900, 1989) ~ "RUS",
+           iso3c == "UZB" & between(formative_year, 1900, 1989) ~ "RUS",
+           # Bulgaria, Romania, Czechia, Hungary, Poland are coded throughout USSR period
+           iso3c == "BLR" & between(formative_year, 1921, 1989) ~ "RUS",
+           iso3c == "EST" & between(formative_year, 1940, 1989) ~ "RUS",
+           iso3c == "LVA" & between(formative_year, 1940, 1989) ~ "RUS",
+           iso3c == "LTU" & between(formative_year, 1940, 1989) ~ "RUS",
+           iso3c == "MDA" & between(formative_year, 1940, 1989) ~ "RUS",
+           iso3c == "UKR" & between(formative_year, 1941, 1989) ~ "RUS",
+           # former Yugoslavia
+           iso3c == "BIH" & between(formative_year, 1945, 1991) ~ "SRB",
+           iso3c == "XKX" & between(formative_year, 1944, 1998) ~ "SRB",
+           iso3c == "MKD" & between(formative_year, 1912, 1990) ~ "SRB",
+           iso3c == "MNE" & between(formative_year, 1919, 1990) ~ "SRB",
+           iso3c == "HRV" & between(formative_year, 1945, 1990) ~ "SRB",
+           iso3c == "SVN" & between(formative_year, 1945, 1988) ~ "SRB",
+           
+           .default = iso3c),
+         iso3c = case_when(
+           formative_before_mig == "no" ~ "DEU",
+           formative_before_mig == "yes" ~ iso3c,
+           TRUE ~ iso3c)) %>%
+  left_join(y = vdem.df, by = c("formative_year" = "year", "iso3c" = "country_text_id"))
+
 ## Export ----
-# Only foreign born
-export(ib22_fb.df, here("data", "ib22_fbpol.rds"))
 # All respondents
-export(ib22_pol.df, here("data", "ib22_pol.rds"))
+export(ib22_democ.df, here("data", "ib22_democ.rds"))
+# Only foreign born
+export(ib22_fborn.df, here("data", "ib22_fborn.rds"))
+# VDem by formative years
+export(ib22_fyear.df, here("data", "ib22_fyear.rds"))
+

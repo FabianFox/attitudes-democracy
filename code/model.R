@@ -35,20 +35,41 @@ weighted.ttest.ci <- function(x, weights, conf.level = 0.95) {
 # Load data ----
 # ------------------------------------------------------------------------------------------------ #
 # All respondents
-ib22_pol.df <- import(here("data", "ib22_pol.rds"))
+ib22_democ.df <- import(here("data", "ib22_democ.rds"))
 
 # Foreign born
-ib22_fb.df <- import(here("data", "ib22_fbpol.rds"))
+ib22_fborn.df <- import(here("data", "ib22_fborn.rds"))
+
+# Formative years
+ib22_fyear.df <- import(here("data", "ib22_fyear.rds"))
 
 # Independent variables: dwf, dpu, dmk, drm, dgg, dme, dra
 # Add mean score of independent variables
 ib_nest.df <- tibble(
-  sample = c("all", "foreign born"),
-  data = list(ib22_pol.df, ib22_fb.df)) %>%
+  sample = c("all", "foreign born", "formative years"),
+  data = list(ib22_democ.df, ib22_fborn.df, ib22_fyear.df)) %>%
   mutate(data = map(data, ~.x %>%
                       mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), 
                                               na.rm = FALSE))))
 
+# Create factor variables
+ib_nest.df <- ib_nest.df %>%
+  mutate(data = map(data, ~.x %>%
+                      mutate(
+                        muslim = case_when(
+                          religion == 2 ~ 1,
+                          religion %in% c(1, 3, 4) ~ 0,
+                          TRUE ~ NA_integer_),
+                        religion = case_when(
+                          religion == 1 ~ "Christian",
+                          religion == 2 ~ "Muslim",
+                          religion == 3 ~ "Other",
+                          religion == 4 ~ "No religion",
+                          TRUE ~ NA_character_),
+                        religion = factor(religion))))
+
+# Description ----
+# ------------------------------------------------------------------------------------------------ #
 # Mean by natives, first and second generation
 mean.df <- ib_nest.df %>%
   filter(sample == "all") %>%
@@ -110,34 +131,32 @@ mean.gt <- mean.tbl %>%
               columns = c("mean", "95%CI")) %>%
   tab_spanner(label = "95")  
 
-# Create factor variables
-ib22_fb.df <- ib_nest.df %>%
-  filter(sample == "foreign born") %>%
-  pull(data) %>%
-  .[[1]] %>%
-  mutate(
-    muslim = case_when(
-      religion == 2 ~ 1,
-      religion %in% c(1, 3, 4) ~ 0,
-      TRUE ~ NA_integer_),
-    religion = case_when(
-      religion == 1 ~ "Christian",
-      religion == 2 ~ "Muslim",
-      religion == 3 ~ "Other",
-      religion == 4 ~ "No religion",
-      TRUE ~ NA_character_),
-    religion = factor(religion))
-
 # FE model ----
 # for country-of-origin (dummy)
 mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + age + I(age^2) + educ +
-                       religion + v2x_polyarchy + stay_length
+                       religion*religion_str + v2x_polyarchy + stay_length
                    | iso3c,
-                   data = ib22_fb.df) 
+                   data = ib_nest.df$data[[2]]) 
 
 ### Table ----
 mod %>%
-  modelsummary()
+  modelsummary(stars = TRUE,
+               coef_map =
+                 rev(c("gender" = "Gender: Female",
+                   "I(age^2)" = "Age^2",
+                   "age" = "Age",
+                   "educSchüler" = "in school",
+                   "educhoch" = "high",
+                   "educmittel" = "Education: medium\n(Ref.: low)",
+                   "religionNo religion:religion_str" = "no religion × Religiosity",
+                   "religionOther:religion_str" = "Other religion × Religiosity",
+                   "religionMuslim:religion_str" = "Religion: Muslim\n(Ref.: Christian) × Religiosity",
+                   "religionNo religion" = "No religion",
+                   "religionOther" = "Other religion",
+                   "religionMuslim" = "Religion: Muslim\n(Ref.: Christian)",
+                   "religion_str" = "Religiosity",
+                   "v2x_polyarchy" = "VDem: Polyarchy",
+                   "stay_length" = "Period of residence")))
 
 ### Plot ----
 fig <- modelplot(mod, colour = "black", 
@@ -149,11 +168,14 @@ fig <- modelplot(mod, colour = "black",
                      "educSchüler" = "in school",
                      "educhoch" = "high",
                      "educmittel" = "Education: medium\n(Ref.: low)",
+                     "religionNo religion:religion_str" = "no religion × Religiosity",
+                     "religionOther:religion_str" = "Other religion × Religiosity",
+                     "religionMuslim:religion_str" = "Religion: Muslim\n(Ref.: Christian) × Religiosity",
                      "religionNo religion" = "No religion",
                      "religionOther" = "Other religion",
                      "religionMuslim" = "Religion: Muslim\n(Ref.: Christian)",
                      "religion_str" = "Religiosity",
-                     "v2x_polyarchy" = "VDEM: Electoral democracy index",
+                     "v2x_polyarchy" = "VDem: Polyarchy",
                      "stay_length" = "Period of residence")) +
   geom_vline(xintercept = 0, color = 'orange') + 
   facet_grid(~factor(model,
@@ -178,64 +200,58 @@ fig <- modelplot(mod, colour = "black",
         axis.text.x = element_text(family = "Verdana", size = 11, color = "black"))
 
 # Hierachical model ----
-### Rescale weights 
-ib22_fb.df <- datawizard::rescale_weights(ib22_fb.df %>% 
+### Rescale weights ----
+ib_nest.df <- ib_nest.df %>%
+  mutate(data = map(data, ~datawizard::rescale_weights(.x %>% 
                                             filter(if_all(c(iso3c, weight), 
                                                           ~!is.na(.))), 
                                           group = "iso3c", 
-                                          probability_weights = "weight")
+                                          probability_weights = "weight")))
 
-### Baseline model ----
-# Model: baseline (null model)
-v0_w.mod <- lmerTest::lmer(democ ~ 1 + (1 | iso3c), 
-                      weights = pweights_a, data = ib22_fb.df)
+## VDem at year of migration ----
+### Models ----
+model.df <- tibble(
+  dv = "democ",
+  type = c("Unconditional",
+           "Base", 
+           "Family × VDem", 
+           "Residence × VDem",
+           "Random slope"),
+  iv = c("1 + (1 | iso3c)", 
+      "gender + age + I(age^2) + stay_length + muslim*religion_str + v2x_polyarchy + (1 | iso3c)",
+      "gender + age + I(age^2) + stay_length + muslim*religion_str + fh*v2x_polyarchy + (1 | iso3c)",
+      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 | iso3c)",
+      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 + v2x_polyarchy| iso3c)"))
 
-### Variance components ----
-# ICC
-performance::icc(v0_w.mod)
+# Run models
+model.df <- model.df %>%
+  mutate(model = map2(dv, iv, ~lmerTest::lmer(
+    str_c(.x, " ~ ", .y),
+    weights = pweights_a,
+    data = ib_nest.df %>%
+      filter(sample == "foreign born") %>%
+      pull(data) %>%
+      .[[1]])))
 
-# M1
-# M1 with weights
-v1_w.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim + religion_str + 
-                             v2x_polyarchy + (1 | iso3c),
-                           weights = pweights_a,
-                         data = ib22_fb.df)
+# filter(sample == "formative years") %>%
+# pull(data) %>%
+#  .[[1]] %>%
+#  filter(!is.na(wandjahr))
 
-# M2
-# Transnational contacts
-v2_w.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim + religion_str + fh + v2x_polyarchy + 
-                           (1 | iso3c),
-                         weights = pweights_a,
-                         data = ib22_fb.df)
-
-# M3A: Interactions (muslim x religion_str)
-v3_w1.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim*religion_str + fh + v2x_polyarchy + 
-                             (1 | iso3c),
-                           weights = pweights_a,
-                           data = ib22_fb.df)
-
-# M3B: Interactions (+ contact x vdem)
-v3_w2.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + stay_length + muslim*religion_str + fh*v2x_polyarchy + 
-                             (1 | iso3c),
-                           weights = pweights_a,
-                           data = ib22_fb.df)
-
-# M3C: Interactions (+ stay_length x vdem)
-v3_w3.mod <- lmerTest::lmer(democ ~ gender + age + I(age^2) + muslim*religion_str + stay_length*v2x_polyarchy + fh*v2x_polyarchy +
-                              (1 | iso3c),
-                            weights = pweights_a,
-                            data = ib22_fb.df)
+# Name list column
+names(model.df$model) <- model.df$type
 
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
-             list("Unconditional" = v0_w.mod,
-                  "Base" = v1_w.mod,
-                  "Full" = v2_w.mod,
-                  "Muslim × Religiosity" = v3_w1.mod,
-                  "Family × VDem" = v3_w2.mod,
-                  "Residence × VDem" = v3_w3.mod),
+             model.df$model,
              stars = TRUE,
              coef_map = c("(Intercept)" = "Intercept",
+                          "gender" = "Gender: Female",
+                          "I(age^2)" = "Age^2",
+                          "age" = "Age",
+                          "educSchüler" = "in school",
+                          "educhoch" = "high",
+                          "educmittel" = "Education: medium\n(Ref.: low)",
                           "stay_length" = "Period of residence (years)",
                           "muslim" = "Muslim",
                           "religion_str" = "Religiosity",
@@ -244,8 +260,9 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                           "muslim:religion_str" = "Muslim × Religiosity",
                           "fh:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
                           "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
-                          "stay_length:v2x_polyarchy" = "Period of residence × Polyarchy (VDem)",
+                          "v2x_polyarchy:stay_length" = "Period of residence × Polyarchy (VDem)",
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
+                          "SD (v2x_polyarchy iso3c)" = "SD (v2x_polyarchy iso3c)",
                           "SD (Observations)" = "SD (Observations)"),
              gof_map = tribble(
                ~raw, ~clean, ~fmt,
@@ -257,6 +274,10 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                "icc", "ICC", 2,
                "rmse", "RMSE", 2)) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
+
+# Plot random effects
+
+## VDem: Formative years ----
 
 # Export
 ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf, 

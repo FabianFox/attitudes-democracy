@@ -208,8 +208,7 @@ ib_nest.df <- ib_nest.df %>%
                                           group = "iso3c", 
                                           probability_weights = "weight")))
 
-## VDem at year of migration ----
-### Models ----
+## Run models ----
 model.df <- tibble(
   dv = "democ",
   type = c("Unconditional",
@@ -221,22 +220,22 @@ model.df <- tibble(
       "gender + age + I(age^2) + stay_length + muslim*religion_str + v2x_polyarchy + (1 | iso3c)",
       "gender + age + I(age^2) + stay_length + muslim*religion_str + fh*v2x_polyarchy + (1 | iso3c)",
       "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 | iso3c)",
-      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 + v2x_polyarchy| iso3c)"))
+      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)"))
+
+# Add different samples
+model.df <- tibble(
+  sample = c("foreign born", "formative years"),
+  data = c("ib_nest.df %>% filter(sample == 'foreign born') %>% pull(data) %>% .[[1]]", 
+           "ib_nest.df %>% filter(sample == 'formative years') %>% pull(data) %>% .[[1]] %>% filter(!is.na(wandjahr))")) %>%
+  expand_grid(model.df)
 
 # Run models
+# VDem at year of immigration
 model.df <- model.df %>%
-  mutate(model = map2(dv, iv, ~lmerTest::lmer(
-    str_c(.x, " ~ ", .y),
+  mutate(model = pmap(list(dv, iv, data), ~lmerTest::lmer(
+    str_c(..1, " ~ ", ..2),
     weights = pweights_a,
-    data = ib_nest.df %>%
-      filter(sample == "foreign born") %>%
-      pull(data) %>%
-      .[[1]])))
-
-# filter(sample == "formative years") %>%
-# pull(data) %>%
-#  .[[1]] %>%
-#  filter(!is.na(wandjahr))
+    data = eval(rlang::parse_expr(..3)))))
 
 # Name list column
 names(model.df$model) <- model.df$type
@@ -273,11 +272,29 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                "bic", "BIC", 0,
                "icc", "ICC", 2,
                "rmse", "RMSE", 2)) %>%
+  tab_spanner(label = md("**VDem at year of immigration**"), columns = 2:6) %>%
+  tab_spanner(label = md("**VDem at age 14**"), columns = 7:11) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
 
 # Plot random effects
+# Using ggeffects
+adj.predictions <- ggeffects::ggpredict(model = model.df$model[[10]], 
+                                        terms = c("v2x_polyarchy [all]", "iso3c"),
+                                        type = "random")
 
-## VDem: Formative years ----
+# Using marginaleffects
+require(marginaleffects) 
+# Predictions
+unit.predictions <- predictions(
+  model.df$model[[10]], 
+  newdata = datagrid(v2x_polyarchy = seq(0.,1, .25), iso3c = unique),
+  re_formula = NULL,
+  vcov = "satterthwaite")
+
+# Marginal effects
+unit.slope <- slopes(
+  model.df$model[[10]], 
+  vcov = "satterthwaite")
 
 # Export
 ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf, 
@@ -287,4 +304,5 @@ ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf,
 gtsave(mean.tbl, filename = "./figure/mean_democ.png")
 
 # MLM results
+gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
 gtsave(mlm.tbl, filename = "./figure/MLM_results.png")

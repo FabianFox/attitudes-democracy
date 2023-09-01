@@ -213,14 +213,17 @@ model.df <- tibble(
   dv = "democ",
   type = c("Unconditional",
            "Base", 
+           "Residence period × VDem",
+           "Discrimination × VDem",
            "Family × VDem", 
-           "Residence × VDem",
            "Random slope"),
-  iv = c("1 + (1 | iso3c)", 
-      "gender + age + I(age^2) + stay_length + muslim*religion_str + v2x_polyarchy + (1 | iso3c)",
-      "gender + age + I(age^2) + stay_length + muslim*religion_str + fh*v2x_polyarchy + (1 | iso3c)",
-      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 | iso3c)",
-      "gender + age + I(age^2) + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)"))
+  iv = c(
+    "1 + (1 | iso3c)", 
+    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + fh*v2x_polyarchy + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)"))
 
 # Add different samples
 model.df <- tibble(
@@ -232,7 +235,7 @@ model.df <- tibble(
 # Run models
 # VDem at year of immigration
 model.df <- model.df %>%
-  mutate(model = pmap(list(dv, iv, data), ~lmerTest::lmer(
+  mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
     str_c(..1, " ~ ", ..2),
     weights = pweights_a,
     data = eval(rlang::parse_expr(..3)))))
@@ -242,24 +245,27 @@ names(model.df$model) <- model.df$type
 
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
-             model.df$model,
+             model.df[model.df$sample != "foreign born",]$model,
              stars = TRUE,
              coef_map = c("(Intercept)" = "Intercept",
                           "gender" = "Gender: Female",
-                          "I(age^2)" = "Age^2",
                           "age" = "Age",
-                          "educSchüler" = "in school",
-                          "educhoch" = "high",
+                          "I(age^2)" = "Age^2",
                           "educmittel" = "Education: medium\n(Ref.: low)",
-                          "stay_length" = "Period of residence (years)",
+                          "educhoch" = "high",
+                          "educSchüler" = "in school",
+                          "stay_length" = "Period of residence (in years)",
                           "muslim" = "Muslim",
                           "religion_str" = "Religiosity",
+                          "discrimination" = "Discrimination",
                           "v2x_polyarchy" = "Polyarchy (VDem)",
-                          "fh" = "Close family (country-of-origin)",
                           "muslim:religion_str" = "Muslim × Religiosity",
                           "fh:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
+                          "fh" = "Close family (country-of-origin)",
                           "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
+                          "stay_length:v2x_polyarchy" = "Period of residence × Polyarchy (VDem)",
                           "v2x_polyarchy:stay_length" = "Period of residence × Polyarchy (VDem)",
+                          "v2x_polyarchy:discrimination" = "Discrimination × Polyarchy (VDem)", 
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
                           "SD (v2x_polyarchy iso3c)" = "SD (v2x_polyarchy iso3c)",
                           "SD (Observations)" = "SD (Observations)"),
@@ -272,37 +278,79 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                "bic", "BIC", 0,
                "icc", "ICC", 2,
                "rmse", "RMSE", 2)) %>%
-  tab_spanner(label = md("**VDem at year of immigration**"), columns = 2:6) %>%
-  tab_spanner(label = md("**VDem at age 14**"), columns = 7:11) %>%
+  tab_spanner(label = md("**VDem at age 14**"), columns = 2:7) %>%
+# tab_spanner(label = md("**VDem at year of immigration**"), columns = 8:12) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
 
 # Plot random effects
 # Using ggeffects
-adj.predictions <- ggeffects::ggpredict(model = model.df$model[[10]], 
-                                        terms = c("v2x_polyarchy [all]", "iso3c"),
-                                        type = "random")
+# Residence period × VDem
+residence.pred <- ggeffects::ggemmeans(model = model.df %>%
+                                         filter(
+                                           sample == "formative years" & type == "Random slope") %>%
+                                         pull(model) %>% 
+                                         .[[1]], 
+                                        terms = c("stay_length [all]", "v2x_polyarchy [0:1 by = 0.25]"),
+                                        type = "fe") 
+
+# Plot
+residence.fig <- plot(residence.pred, facets = TRUE, colors = "bw") + 
+  scale_x_continuous(breaks = seq(0, 70, 10), labels = seq(0, 70, 10)) +
+  labs(title = "Predicted values of democracy", 
+       subtitle = "by residence period at selected values of VDem",
+       x = "Residence period", y = "Estimate") +
+  cowplot::theme_minimal_hgrid()
+
+# Discrimination × VDem
+discrimination.pred <- ggeffects::ggemmeans(model = model.df %>%
+                                              filter(
+                                                sample == "formative years" & type == "Random slope") %>%
+                                              pull(model) %>% 
+                                              .[[1]], 
+                                        terms = c("discrimination [all]", "v2x_polyarchy [0:1 by = 0.25]"),
+                                        type = "fe") 
+
+# Plot 
+discrimination.fig <- plot(discrimination.pred, facets = TRUE, colors = "bw") + 
+  scale_x_continuous(breaks = seq(0, 3, 1), labels = seq(0, 3, 1)) +
+  labs(title = "Predicted values of democracy",
+       subtitle = "by discrimination at selected values of VDem",
+       x = "Discrimination", y = "Estimate") +
+  cowplot::theme_minimal_hgrid()
 
 # Using marginaleffects
 require(marginaleffects) 
 # Predictions
+# see: https://marginaleffects.com/articles/lme4.html
+# re.form if NULL include all random effects, if NA include no random effects
+# Unit level
 unit.predictions <- predictions(
   model.df$model[[10]], 
-  newdata = datagrid(v2x_polyarchy = seq(0.,1, .25), iso3c = unique),
-  re_formula = NULL,
-  vcov = "satterthwaite")
+  newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), iso3c = unique),
+  re.form = NULL)
+
+# Population level
+pop.predictions <- predictions(
+  model.df$model[[10]], 
+  newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), stay_length = 0:50),
+  re.form = NA)
 
 # Marginal effects
-unit.slope <- slopes(
-  model.df$model[[10]], 
-  vcov = "satterthwaite")
+avg_margins <- avg_slopes(model.df$model[[10]], 
+                          variable = "v2x_polyarchy",
+                          re.form = NULL)
 
 # Export
-ggsave(here("figure", "model_foreignborn.pdf"), dpi = 300, device = cairo_pdf, 
+ggsave(here("figure", "democ_residence-vdem.pdf"), plot = residence.fig, 
+       dpi = 300, device = cairo_pdf, 
+       width = 34, height = 24, units = "cm")
+
+ggsave(here("figure", "democ_discrimination-vdem.pdf"), plot = discrimination.fig,
+       dpi = 300, device = cairo_pdf, 
        width = 34, height = 24, units = "cm")
 
 # Mean democ index
 gtsave(mean.tbl, filename = "./figure/mean_democ.png")
 
 # MLM results
-gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
 gtsave(mlm.tbl, filename = "./figure/MLM_results.png")

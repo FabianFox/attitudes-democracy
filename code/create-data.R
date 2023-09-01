@@ -75,6 +75,7 @@ ib22_democ.df <- ib22.df %>%
          age, age_cat, gender, educ, income, lang_skill = pms2,
          religion = d16,
          religion_str = d17,
+         discrimination = dis2,
          # Region
          state, region,
          # Migration
@@ -89,7 +90,7 @@ ib22_democ.df <- ib22.df %>%
     gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
     gebland_chr = str_squish(gebland_chr),
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
-             dlp, dmf, lang_skill, wandjahr, religion, religion_str,
+             dlp, dmf, lang_skill, wandjahr, religion, religion_str, discrimination,
              fh, fhk, fa, fak, wandjahr), 
            ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
     # Dichotomize democ items

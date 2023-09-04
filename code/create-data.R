@@ -101,7 +101,8 @@ ib22_democ.df <- ib22.df %>%
                TRUE ~ NA_real_),
            .names = "{.col}_bin"),
     across(c("fh", "fa"), ~if_else(.x == 2, 0, .x)),
-    stay_length = year(ymd(a_datum)) - wandjahr)
+    stay_length = year(ymd(a_datum)) - wandjahr,
+    age_mig = wandjahr - (year(ymd(a_datum)) - age))
 
 ## Add V-Dem ----
 # Download V-Dem

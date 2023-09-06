@@ -52,21 +52,35 @@ ib_nest.df <- tibble(
                       mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), 
                                               na.rm = FALSE))))
 
-# Create factor variables
+#### Create factor variables ----
 ib_nest.df <- ib_nest.df %>%
   mutate(data = map(data, ~.x %>%
                       mutate(
-                        muslim = case_when(
-                          religion == 2 ~ 1,
-                          religion %in% c(1, 3, 4) ~ 0,
+                        muslim = case_match(
+                          religion,
+                          2 ~ 1,
+                          c(1, 3, 4) ~ 0,
                           TRUE ~ NA_integer_),
-                        religion = case_when(
-                          religion == 1 ~ "Christian",
-                          religion == 2 ~ "Muslim",
-                          religion == 3 ~ "Other",
-                          religion == 4 ~ "No religion",
+                        religion = case_match(
+                          religion,
+                          1 ~ "Christian",
+                          2 ~ "Muslim",
+                          3 ~ "Other",
+                          4 ~ "No religion",
                           TRUE ~ NA_character_),
-                        religion = factor(religion))))
+                        religion = factor(religion,
+                                          levels = c("Christian", "Muslim", 
+                                                     "Other", "No religion")),
+                        discrimination = case_match(
+                          discrimination,
+                          0 ~ "not at all",
+                          1 ~ "low",
+                          2 ~ "high",
+                          3 ~ "very high",
+                          TRUE ~ NA_character_),
+                        discrimination = factor(discrimination, 
+                                                levels = c("not at all", "low", 
+                                                           "high", "very high")))))
 
 # Description ----
 # ------------------------------------------------------------------------------------------------ #
@@ -133,7 +147,7 @@ mean.gt <- mean.tbl %>%
 
 # FE model ----
 # for country-of-origin (dummy)
-mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + age + I(age^2) + educ +
+mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + educ + age + I(age^2) +
                        religion*religion_str + v2x_polyarchy + stay_length
                    | iso3c,
                    data = ib_nest.df$data[[2]]) 
@@ -145,6 +159,7 @@ mod %>%
                  rev(c("gender" = "Gender: Female",
                    "I(age^2)" = "Age^2",
                    "age" = "Age",
+                   "age_mig" = "Age at immigration",
                    "educSchüler" = "in school",
                    "educhoch" = "high",
                    "educmittel" = "Education: medium\n(Ref.: low)",
@@ -165,6 +180,7 @@ fig <- modelplot(mod, colour = "black",
                      "gender" = "Gender: Female",
                      "I(age^2)" = "Age^2",
                      "age" = "Age",
+                     "age_mig" = "Age at immigration",
                      "educSchüler" = "in school",
                      "educhoch" = "high",
                      "educmittel" = "Education: medium\n(Ref.: low)",
@@ -213,15 +229,13 @@ model.df <- tibble(
   dv = "democ",
   type = c("Unconditional",
            "Base", 
-           "Residence period × VDem",
-           "Discrimination × VDem",
+           "Interactions",
            "Family × VDem", 
            "Random slope"),
   iv = c(
     "1 + (1 | iso3c)", 
     "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 | iso3c)",
     "gender + age + I(age^2) + educ + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + fh*v2x_polyarchy + (1 | iso3c)",
     "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)"))
 
@@ -252,20 +266,24 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                           "age" = "Age",
                           "I(age^2)" = "Age^2",
                           "educmittel" = "Education: medium\n(Ref.: low)",
-                          "educhoch" = "high",
-                          "educSchüler" = "in school",
+                          "educhoch" = "Educ.: high",
+                          "educSchüler" = "Educ.: in school",
                           "stay_length" = "Period of residence (in years)",
                           "muslim" = "Muslim",
                           "religion_str" = "Religiosity",
-                          "discrimination" = "Discrimination",
+                          "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
+                          "discriminationhigh" = "Dis.: high",
+                          "discriminationvery high" = "Dis.: very high",
                           "v2x_polyarchy" = "Polyarchy (VDem)",
                           "muslim:religion_str" = "Muslim × Religiosity",
-                          "fh:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
                           "fh" = "Close family (country-of-origin)",
+                          "fh:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
                           "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
                           "stay_length:v2x_polyarchy" = "Period of residence × Polyarchy (VDem)",
                           "v2x_polyarchy:stay_length" = "Period of residence × Polyarchy (VDem)",
-                          "v2x_polyarchy:discrimination" = "Discrimination × Polyarchy (VDem)", 
+                          "v2x_polyarchy:discriminationlow" = "Discrimination (low) × Polyarchy (VDem)", 
+                          "v2x_polyarchy:discriminationhigh" = "Discrimination (high) × Polyarchy (VDem)", 
+                          "v2x_polyarchy:discriminationvery high" = "Discrimination (very high) × Polyarchy (VDem)", 
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
                           "SD (v2x_polyarchy iso3c)" = "SD (v2x_polyarchy iso3c)",
                           "SD (Observations)" = "SD (Observations)"),
@@ -278,44 +296,79 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                "bic", "BIC", 0,
                "icc", "ICC", 2,
                "rmse", "RMSE", 2)) %>%
-  tab_spanner(label = md("**VDem at age 14**"), columns = 2:7) %>%
+  tab_spanner(label = md("**VDem at age 14**"), columns = 2:5) %>%
 # tab_spanner(label = md("**VDem at year of immigration**"), columns = 8:12) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
 
 # Plot random effects
 # Using ggeffects
 # Residence period × VDem
-residence.pred <- ggeffects::ggemmeans(model = model.df %>%
+residence.pred <- ggeffects::ggpredict(model = model.df %>%
                                          filter(
-                                           sample == "formative years" & type == "Random slope") %>%
+                                           sample == "formative years" & 
+                                             type == "Random slope") %>%
                                          pull(model) %>% 
                                          .[[1]], 
-                                        terms = c("stay_length [all]", "v2x_polyarchy [0:1 by = 0.25]"),
-                                        type = "fe") 
+                                        terms = c("stay_length [all]", 
+                                                  "v2x_polyarchy [0:1 by = 0.25]"),
+                                       condition = c(gender = 0, muslim = 0), # Reference categories
+                                       type = "fe") 
 
 # Plot
 residence.fig <- plot(residence.pred, facets = TRUE, colors = "bw") + 
-  scale_x_continuous(breaks = seq(0, 70, 10), labels = seq(0, 70, 10)) +
-  labs(title = "Predicted values of democracy", 
-       subtitle = "by residence period at selected values of VDem",
-       x = "Residence period", y = "Estimate") +
+  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  labs(title = "Democratic attitudes by residence period and VDem", 
+       subtitle = "Holding covariates constant (mean or reference category)",
+       caption = "Source: Integration Barometer 2022; weighted data",
+       x = "Residence period", y = "") +
+  facet_wrap(~str_c("VDem: ", group)) +
+  cowplot::theme_minimal_hgrid()
+
+# Quantity of interest
+residence.qt <- marginaleffects::avg_predictions(model = model.df %>%
+                  filter(
+                    sample == "formative years" & 
+                      type == "Random slope") %>%
+                  pull(model) %>% 
+                  .[[1]],
+                variables = list(v2x_polyarchy = "minmax", stay_length = "minmax"),
+                re.form = NULL)
+
+############## Adjust further 
+residence.qt.fig <- residence.qt %>%
+  ggplot(aes(colour = factor(stay_length, 
+                        levels = c(0, 72), 
+                        labels = c("Min: 0", "Max: 72")), 
+             y = estimate, 
+             ymin = conf.low, ymax = conf.high,
+             x = factor(v2x_polyarchy, 
+                             levels = c(0.013, 0.915), 
+                             labels = c("Min", "Max"))
+             )) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_linerange(stat = "identity", position = position_dodge(width = 0.9)) +
   cowplot::theme_minimal_hgrid()
 
 # Discrimination × VDem
 discrimination.pred <- ggeffects::ggemmeans(model = model.df %>%
                                               filter(
-                                                sample == "formative years" & type == "Random slope") %>%
+                                                sample == "formative years" & 
+                                                  type == "Random slope") %>%
                                               pull(model) %>% 
                                               .[[1]], 
-                                        terms = c("discrimination [all]", "v2x_polyarchy [0:1 by = 0.25]"),
+                                        terms = c("discrimination [all]", 
+                                                  "v2x_polyarchy [0:1 by = 0.25]"),
+                                        condition = c(gender = 0, muslim = 0), # Reference categories
                                         type = "fe") 
 
 # Plot 
 discrimination.fig <- plot(discrimination.pred, facets = TRUE, colors = "bw") + 
-  scale_x_continuous(breaks = seq(0, 3, 1), labels = seq(0, 3, 1)) +
-  labs(title = "Predicted values of democracy",
-       subtitle = "by discrimination at selected values of VDem",
-       x = "Discrimination", y = "Estimate") +
+  geom_line(linetype = "dashed") +
+  labs(title = "Democratic attitudes by perceived discrimination and VDem", 
+       subtitle = "Holding covariates constant (mean or reference category)",
+       caption = "Source: Integration Barometer 2022; weighted data",
+       x = "Perceived disrimination", y = "") +
+  facet_wrap(~str_c("VDem: ", group)) +
   cowplot::theme_minimal_hgrid()
 
 # Using marginaleffects
@@ -332,7 +385,7 @@ unit.predictions <- predictions(
 # Population level
 pop.predictions <- predictions(
   model.df$model[[10]], 
-  newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), stay_length = 0:50),
+  newdata = datagrid(v2x_polyarchy = seq(0, 1, .25), stay_length = 0:90),
   re.form = NA)
 
 # Marginal effects

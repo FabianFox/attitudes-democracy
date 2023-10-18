@@ -7,10 +7,10 @@ if(!require("xfun")) install.packages("xfun")
 xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects",
                   "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras")
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
-conflict_prefer("expand", "tidyr")
-conflict_prefer("summarize", "dplyr")
+conflicts_prefer(dplyr::filter(),
+                 dplyr::select(),
+                 dplyr::summarize(),
+                 tidyr::expand())
 
 # Fonts
 extrafont::loadfonts()
@@ -46,7 +46,7 @@ ib22_fyear.df <- import(here("data", "ib22_fyear.rds"))
 # Independent variables: dwf, dpu, dmk, drm, dgg, dme, dra
 # Add mean score of independent variables
 ib_nest.df <- tibble(
-  sample = c("all", "foreign born", "formative years"),
+  sample = c("total", "foreign born", "formative years"),
   data = list(ib22_democ.df, ib22_fborn.df, ib22_fyear.df)) %>%
   mutate(data = map(data, ~.x %>%
                       mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), 
@@ -94,7 +94,7 @@ ib_nest.df <- ib_nest.df %>%
 # ------------------------------------------------------------------------------------------------ #
 # Mean by natives, first and second generation
 mean.df <- ib_nest.df %>%
-  filter(sample == "all") %>%
+  filter(sample == "total") %>%
   pull(data) %>%
   .[[1]] %>%
   mutate(
@@ -243,9 +243,9 @@ model.df <- tibble(
   iv = c(
     "1 + (1 | iso3c)", 
     "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)"))
+    "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
+    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination + (1 + v2x_polyarchy | iso3c)"))
 
 # Add different samples
 model.df <- tibble(
@@ -408,7 +408,30 @@ avg_margins <- avg_slopes(model.df$model[[10]],
                           variable = "v2x_polyarchy",
                           re.form = NULL)
 
-# Export
+# Total sample ----
+total_sample.df <- ib_nest.df %>% 
+  filter(sample == 'total') %>% 
+  pull(data) %>% 
+  .[[1]] %>%
+  mutate(mig_type = case_when(
+    migra == 1 ~ "natives",
+    migra == 2 & iso3c != "DEU" ~ "(Resettlers) first generation",
+    migra == 2 & iso3c == "DEU" ~ "(Resettlers) second generation",
+    migra == 3 & iso3c != "DEU" ~ "(Turkish) first generation",
+    migra == 3 & iso3c == "DEU" ~ "(Turkish) second generation",
+    migra == 4 & iso3c != "DEU" ~ "(European) first generation",
+    migra == 4 & iso3c == "DEU" ~ "(European) second generation",
+    migra == 5 & iso3c != "DEU" ~ "(Other) first generation",
+    migra == 5 & iso3c == "DEU" ~ "(Other) second generation",
+    .default = NA_character_
+  ))
+
+full_sample.mod <- lm(democ ~ gender + age + I(age^2) + educ + muslim*religion_str + 
+                        mig_type + discrimination, 
+                      weights = weight,
+                      data = total_sample.df)
+
+# Export ----
 ggsave(here("figure", "democ_residence-vdem.pdf"), plot = residence.fig, 
        dpi = 300, device = cairo_pdf, 
        width = 20, height = 14, units = "cm")

@@ -238,14 +238,12 @@ model.df <- tibble(
   type = c("Unconditional",
            "Base", 
            "Interactions",
-           "Family × VDem", 
            "Random slope"),
   iv = c(
     "1 + (1 | iso3c)", 
     "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
     "gender + age + I(age^2) + educ + stay_length + muslim*religion_str + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + age + I(age^2) + educ + muslim*religion_str + fh*v2x_polyarchy + stay_length*v2x_polyarchy + discrimination + (1 + v2x_polyarchy | iso3c)"))
+    "gender + age + I(age^2) + educ + muslim*religion_str + stay_length*v2x_polyarchy + discrimination + (1 + v2x_polyarchy | iso3c)"))
 
 # Add different samples
 model.df <- tibble(
@@ -327,7 +325,7 @@ residence.pred <- ggeffects::ggpredict(model = model.df %>%
 residence.fig <- plot(residence.pred, facets = TRUE, colors = "bw") + 
   scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
   labs(title = "Predicted democratic attitudes by residence period and VDem", 
-       subtitle = "Holding covariates constant (mean or reference category)",
+       subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "") +
   facet_wrap(~str_c("VDem: ", group)) +
@@ -393,18 +391,27 @@ discrimination.fig <- plot(discrimination.pred, facets = T, colors = "bw") +
 # re.form if NULL include all random effects, if NA include no random effects
 # Unit level
 unit.predictions <- predictions(
-  model.df$model[[10]], 
+  model.df %>% 
+    filter(sample == "formative years" & type == "Random slope") %>%
+    pull(model) %>%
+    .[[1]], 
   newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), iso3c = unique),
   re.form = NULL)
 
 # Population level
 pop.predictions <- predictions(
-  model.df$model[[10]], 
+  model.df %>% 
+    filter(sample == "formative years" & type == "Random slope") %>%
+    pull(model) %>%
+    .[[1]], 
   newdata = datagrid(v2x_polyarchy = seq(0, 1, .25), stay_length = 0:70),
   re.form = NA)
 
 # Marginal effects
-avg_margins <- avg_slopes(model.df$model[[10]], 
+avg_margins <- avg_slopes(model.df %>% 
+                            filter(sample == "formative years" & type == "Random slope") %>%
+                            pull(model) %>%
+                            .[[1]], 
                           variable = "v2x_polyarchy",
                           re.form = NULL)
 
@@ -423,13 +430,53 @@ total_sample.df <- ib_nest.df %>%
     migra == 4 & iso3c == "DEU" ~ "(European) second generation",
     migra == 5 & iso3c != "DEU" ~ "(Other) first generation",
     migra == 5 & iso3c == "DEU" ~ "(Other) second generation",
-    .default = NA_character_
-  ))
+    .default = NA_character_),
+    mig_type = factor(mig_type, levels = c("natives", 
+                                           "(Resettlers) first generation",
+                                           "(Resettlers) second generation",
+                                           "(Turkish) first generation",
+                                           "(Turkish) second generation",
+                                           "(European) first generation",
+                                           "(European) second generation",
+                                           "(Other) first generation",
+                                           "(Other) second generation")))
 
+# Model
 full_sample.mod <- lm(democ ~ gender + age + I(age^2) + educ + muslim*religion_str + 
                         mig_type + discrimination, 
                       weights = weight,
                       data = total_sample.df)
+
+# Modelsummary
+full_sample_result.tbl <- modelsummary(title = md("**Linear Regression Model for Importance of Democracy**"),
+             full_sample.mod,
+             stars = TRUE,
+             estimate = "{estimate} ({std.error}){stars}",
+             statistic = NULL,
+             coef_map = c("(Intercept)" = "Intercept",
+                          "genderFemale" = "Gender: Female",
+                          "age" = "Age",
+                          "I(age^2)" = "Age^2",
+                          "educmittel" = "Education: medium\n(Ref.: low)",
+                          "educhoch" = "Educ.: high",
+                          "educSchüler" = "Educ.: in school",
+                          "stay_length" = "Period of residence (in years)",
+                          "muslimMuslim" = "Muslim",
+                          "religion_str" = "Religiosity",
+                          "mig_type(Resettlers) first generation" = "Resettlers: first generation (Ref.: Natives)",
+                          "mig_type(Resettlers) second generation" = "Resettlers: second generation",
+                          "mig_type(Turkish) first generation" = "Turkish: first generation",
+                          "mig_type(Turkish) second generation" = "Turkish: second generation",
+                          "mig_type(European) first generation" = "European: first generation",
+                          "mig_type(European) second generation" = "European: second generation", 
+                          "mig_type(Other) first generation" = "Other: first generation",
+                          "mig_type(Other) second generation" = "Other: second generation",
+                          "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
+                          "discriminationhigh" = "Dis.: high",
+                          "discriminationvery high" = "Dis.: very high",
+                          "v2x_polyarchy" = "Polyarchy (VDem)",
+                          "muslimMuslim:religion_str" = "Muslim × Religiosity")) %>%
+  tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
 
 # Export ----
 ggsave(here("figure", "democ_residence-vdem.pdf"), plot = residence.fig, 
@@ -441,7 +488,10 @@ ggsave(here("figure", "democ_discrimination-vdem.pdf"), plot = discrimination.fi
        width = 22, height = 14, units = "cm")
 
 # Mean democ index
-gtsave(mean.tbl, filename = "./figure/mean_democ.png")
+gtsave(mean.gt, filename = "./figure/mean_democ.png")
 
 # MLM results
 gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
+
+# Full sample results
+gtsave(full_sample_result.tbl, filename = "./figure/FullSample_results.png")

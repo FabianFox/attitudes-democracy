@@ -193,7 +193,7 @@ ib22_fyear.df <- ib22_democ.df %>%
            formative_before_mig == "no" ~ "DEU",
            formative_before_mig == "yes" ~ iso3c,
            TRUE ~ iso3c)) %>%
-  filter(iso3c != "DEU") %>%
+  filter(gebland_chr != "Deutschland") %>%
   left_join(y = vdem.df, by = c("formative_year" = "year", "iso3c" = "country_text_id"))
 
 ## Export ----

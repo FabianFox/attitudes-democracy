@@ -422,6 +422,28 @@ residence_coo.qt.fig <- residence_coo.qt %>%
   cowplot::theme_minimal_grid() +
   theme(plot.caption = element_text(hjust = 0))
 
+# Residence coo and Germany combined
+residence_comb.fig <- residence.pred %>%
+  as.data.frame() %>%
+  mutate(where = "Germany") %>%
+  bind_rows(residence_coo.pred %>%
+              as.data.frame() %>%
+              mutate(where = "County of origin")) %>%
+  ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where)) +
+  geom_line(linetype = "dashed") +
+  geom_ribbon(alpha = .2) + 
+  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  labs(title = 
+         "Predicted democratic attitudes by residence period and VDem", 
+       subtitle = "Holding covariates constant (at mean or reference category)",
+       caption = "Source: Integration Barometer 2022; weighted data",
+       x = "", y = "", 
+       fill = "Residence period in: ") +
+  facet_wrap(~str_c("VDem: ", group)) +
+  cowplot::theme_minimal_hgrid() +
+  theme(plot.caption = element_text(hjust = 0))
+  
+
 #### Discrimination × VDem ----
 discrimination.pred <- ggeffects::ggpredict(model = model.df %>%
                                               filter(
@@ -550,6 +572,10 @@ ggsave(here("figure", "residence_coo_x_vdem.pdf"), plot = residence_coo.fig,
        dpi = 300, device = cairo_pdf, 
        width = 25, height = 14, units = "cm")
 
+ggsave(here("figure", "residence_x_vdem.pdf"), plot = residence_comb.fig,
+       dpi = 300, device = cairo_pdf, 
+       width = 25, height = 14, units = "cm")
+
 # Mean democ index
 gtsave(mean.gt, filename = "./figure/mean_democ.png")
 
@@ -564,3 +590,5 @@ ggsave(here("figure", "religion_religiosity_interaction_fullsample.pdf"),
        plot = muslim_religiosity.fig, 
        dpi = 300, device = cairo_pdf, 
        width = 20, height = 14, units = "cm")
+
+

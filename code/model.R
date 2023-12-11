@@ -37,17 +37,17 @@ weighted.ttest.ci <- function(x, weights, conf.level = 0.95) {
 # All respondents
 ib22_democ.df <- import(here("data", "ib22_democ.rds"))
 
-# Foreign born
-ib22_fborn.df <- import(here("data", "ib22_fborn.rds"))
+# Formative years (cutoff: 15)
+ib22_f15year.df <- import(here("data", "ib22_f15year.rds"))
 
-# Formative years
-ib22_fyear.df <- import(here("data", "ib22_fyear.rds"))
+# Formative years (cutoff: 17)
+ib22_f17year.df <- import(here("data", "ib22_f17year.rds"))
 
 # Independent variables: dwf, dpu, dmk, drm, dgg, dme, dra
 # Add mean score of independent variables
 ib_nest.df <- tibble(
-  sample = c("total", "foreign born", "formative years"),
-  data = list(ib22_democ.df, ib22_fborn.df, ib22_fyear.df)) %>%
+  sample = c("total", "formative years: 15", "formative years: 17"),
+  data = list(ib22_democ.df, ib22_f15year.df, ib22_f17year.df)) %>%
   mutate(data = map(data, ~.x %>%
                       mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), 
                                               na.rm = FALSE))))
@@ -154,54 +154,81 @@ mean.gt <- mean.tbl %>%
               columns = c("mean", "95%CI")) %>%
   tab_spanner(label = "95")  
 
+# Correlation between VDem measures
+vdem_cor.df <- ib_nest.df %>%
+  filter(sample %in% c("formative years: 15", "formative years: 17")) %>%
+  mutate(cor.tbl = map(data, ~.x %>%
+                         select(contains("v2x"), "weight") %>%
+                         collapse::pwcor(X = .[], 
+                                         use = "pairwise.complete.obs",
+                                         w = .$weight) %>%
+                         # remove weights
+                         .[-7, -7])) 
+
+# Table of correlations in analysis (Sample: formative years)
+vdem_cor.tbl <- vdem_cor.df %>%
+  filter(sample == "formative years: 15") %>%
+  pull(cor.tbl) %>%
+  .[[1]] %>%
+  as.data.frame(row.names = c("v2x_polyarchy", "v2x_libdem", "v2x_partipdem", "v2xed_ed_dmcon",
+                              "v2xed_ed_ptcon", "v2xed_ptcon")) %>%
+  gt(rownames_to_stub = TRUE) %>%
+  tab_header(title = md("Correlation table")) %>%
+  tab_source_note(source_note = md("**Source**: SVR-Integrationsbarometer 2022; weighted")) %>%
+  fmt_number(decimals = 3)
+
 # FE model ----
 # for country-of-origin (dummy)
-mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + educ + age + I(age^2) +
-                       religion*religion_str + v2x_polyarchy + stay_length
+mod <- fixest::feols(c(dwf, dpu, dmk, drm, dgg, dme, dra, democ) ~ gender + educ +
+                       muslim*religion_str + v2xed_ed_dmcon*timeorig + v2xed_ed_dmcon*timedest
                    | iso3c,
-                   data = ib_nest.df$data[[2]]) 
+                   data = ib_nest.df[ib_nest.df$sample == "formative years: 15",]$data[[1]]) 
 
 ### Table ----
 mod %>%
   modelsummary(stars = TRUE,
                coef_map =
-                 rev(c("gender" = "Gender: Female",
-                   "I(age^2)" = "Age^2",
-                   "age" = "Age",
-                   "age_mig" = "Age at immigration",
-                   "educSchüler" = "in school",
-                   "educhoch" = "high",
+                 c("(Intercept)" = "Intercept",
+                   "genderFemale" = "Gender: Female",
                    "educmittel" = "Education: medium\n(Ref.: low)",
-                   "religionNo religion:religion_str" = "no religion × Religiosity",
-                   "religionOther:religion_str" = "Other religion × Religiosity",
-                   "religionMuslim:religion_str" = "Religion: Muslim\n(Ref.: Christian) × Religiosity",
-                   "religionNo religion" = "No religion",
-                   "religionOther" = "Other religion",
-                   "religionMuslim" = "Religion: Muslim\n(Ref.: Christian)",
+                   "educhoch" = "Educ.: high",
+                   "educSchüler" = "Educ.: in school",
+                   "stay_length" = "Period of residence (Germany)",
+                   "timeorig" = "Period of residence (Country of origin)",
+                   "muslimMuslim" = "Muslim",
                    "religion_str" = "Religiosity",
-                   "v2x_polyarchy" = "VDem: Polyarchy",
-                   "stay_length" = "Period of residence")))
+                   "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
+                   "discriminationhigh" = "Dis.: high",
+                   "discriminationvery high" = "Dis.: very high",
+                   "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
+                   "muslimMuslim:religion_str" = "Muslim × Religiosity",
+                   "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
+                   "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
+                   "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
+                   "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)"))
 
 ### Plot ----
 fig <- modelplot(mod, colour = "black", 
-                 coef_map =
-                   c(
-                     "gender" = "Gender: Female",
-                     "I(age^2)" = "Age^2",
-                     "age" = "Age",
-                     "age_mig" = "Age at immigration",
-                     "educSchüler" = "in school",
-                     "educhoch" = "high",
+                 coef_map = 
+                   rev(
+                     c("(Intercept)" = "Intercept",
+                     "genderFemale" = "Gender: Female",
                      "educmittel" = "Education: medium\n(Ref.: low)",
-                     "religionNo religion:religion_str" = "no religion × Religiosity",
-                     "religionOther:religion_str" = "Other religion × Religiosity",
-                     "religionMuslim:religion_str" = "Religion: Muslim\n(Ref.: Christian) × Religiosity",
-                     "religionNo religion" = "No religion",
-                     "religionOther" = "Other religion",
-                     "religionMuslim" = "Religion: Muslim\n(Ref.: Christian)",
+                     "educhoch" = "Educ.: high",
+                     "educSchüler" = "Educ.: in school",
+                     "stay_length" = "Period of residence (Germany)",
+                     "timeorig" = "Period of residence (Country of origin)",
+                     "muslimMuslim" = "Muslim",
                      "religion_str" = "Religiosity",
-                     "v2x_polyarchy" = "VDem: Polyarchy",
-                     "stay_length" = "Period of residence")) +
+                     "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
+                     "discriminationhigh" = "Dis.: high",
+                     "discriminationvery high" = "Dis.: very high",
+                     "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
+                     "muslimMuslim:religion_str" = "Muslim × Religiosity",
+                     "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
+                     "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
+                     "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
+                     "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)"))) +
   geom_vline(xintercept = 0, color = 'orange') + 
   facet_grid(~factor(model,
                      levels = c("lhs: dwf", "lhs: dpu", "lhs: dmk", "lhs: drm", "lhs: dgg", "lhs: dme",
@@ -242,15 +269,16 @@ model.df <- tibble(
            "Random slope"),
   iv = c(
     "1 + (1 | iso3c)", 
-    "gender + educ + stay_length + length_stay_foreign + muslim*religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + educ + muslim*religion_str + stay_length*v2x_polyarchy + length_stay_foreign*v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + educ + muslim*religion_str + stay_length*v2x_polyarchy + length_stay_foreign*v2x_polyarchy + discrimination + (1 + v2x_polyarchy | iso3c)"))
+    "gender + educ + timedest + timeorig + muslim*religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c)",
+    "gender + educ + muslim*religion_str + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + discrimination + (1 | iso3c)",
+    "gender + educ + muslim*religion_str + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + discrimination + (1 + v2xed_ed_dmcon | iso3c)"))
 
 # Add different samples
 model.df <- tibble(
-  sample = c("foreign born", "formative years"),
-  data = c("ib_nest.df %>% filter(sample == 'foreign born') %>% pull(data) %>% .[[1]]", 
-           "ib_nest.df %>% filter(sample == 'formative years') %>% pull(data) %>% .[[1]]")) %>%
+  sample = c("formative years: 15", 
+             "formative years: 17"),
+  data = c("ib_nest.df %>% filter(sample == 'formative years: 15') %>% pull(data) %>% .[[1]]",
+           "ib_nest.df %>% filter(sample == 'formative years: 17') %>% pull(data) %>% .[[1]]")) %>%
   expand_grid(model.df)
 
 # Run models
@@ -267,38 +295,33 @@ names(model.df$model) <- model.df$type
 ### Model output ----
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
-             model.df[model.df$sample != "foreign born",]$model,
+             model.df[model.df$sample == "formative years: 15",]$model,
              stars = TRUE,
-             estimate = "{estimate} ({std.error}){stars}",
-             statistic = NULL,
+             estimate = "{estimate}{stars}",
+             statistic = "({std.error})",
              coef_map = c("(Intercept)" = "Intercept",
                           "genderFemale" = "Gender: Female",
-                          # "age" = "Age",
-                          # "I(age^2)" = "Age^2",
                           "educmittel" = "Education: medium\n(Ref.: low)",
                           "educhoch" = "Educ.: high",
                           "educSchüler" = "Educ.: in school",
-                          "stay_length" = "Period of residence (Germany)",
-                          "length_stay_foreign" = "Period of residence (Country of origin)",
+                          "timedest" = "Period of residence (Germany)",
+                          "timeorig" = "Period of residence (Country of origin)",
                           "muslimMuslim" = "Muslim",
                           "religion_str" = "Religiosity",
                           "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
                           "discriminationhigh" = "Dis.: high",
                           "discriminationvery high" = "Dis.: very high",
-                          "v2x_polyarchy" = "Polyarchy (VDem)",
+                          "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
                           "muslimMuslim:religion_str" = "Muslim × Religiosity",
                           # "fhYes" = "Close family (country-of-origin)",
                           # "fhYes:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
                           # "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
-                          "stay_length:v2x_polyarchy" = "Period of residence (Germany) × Polyarchy (VDem)",
-                          "v2x_polyarchy:stay_length" = "Period of residence (Germany) × Polyarchy (VDem)",
-                          "length_stay_foreign:v2x_polyarchy" = "Period of residence (CoO) × Polyarchy (VDem)",
-                          "v2x_polyarchy:length_stay_foreign" = "Period of residence (CoO) × Polyarchy (VDem)",
-                          "v2x_polyarchy:discriminationlow" = "Discrimination (low) × Polyarchy (VDem)", 
-                          "v2x_polyarchy:discriminationhigh" = "Discrimination (high) × Polyarchy (VDem)", 
-                          "v2x_polyarchy:discriminationvery high" = "Discrimination (very high) × Polyarchy (VDem)", 
+                          "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
+                          "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
+                          "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
+                          "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)",
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
-                          "SD (v2x_polyarchy iso3c)" = "SD (v2x_polyarchy iso3c)",
+                          "SD (v2xed_ed_dmcon iso3c)" = "SD (v2xed_ed_dmcon iso3c)",
                           "SD (Observations)" = "SD (Observations)"),
              gof_map = tribble(
                ~raw, ~clean, ~fmt,
@@ -318,12 +341,12 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
 #### Residence period (DEU) × VDem ----
 residence.pred <- ggeffects::ggpredict(model = model.df %>%
                                          filter(
-                                           sample == "formative years" & 
+                                           sample == "formative years: 15" & 
                                              type == "Random slope") %>%
                                          pull(model) %>% 
                                          .[[1]], 
-                                        terms = c("stay_length [all]", 
-                                                  "v2x_polyarchy [0:1 by = 0.25]"),
+                                        terms = c("timedest [all]", 
+                                                  "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                        type = "fe") 
 
 # Plot
@@ -340,27 +363,24 @@ residence.fig <- plot(residence.pred, facets = TRUE, colors = "bw") +
 # Quantity of interest
 residence.qt <- marginaleffects::avg_predictions(model = model.df %>%
                   filter(
-                    sample == "formative years" & 
+                    sample == "formative years: 15" & 
                       type == "Random slope") %>%
                   pull(model) %>% 
                   .[[1]],
-                variables = list(v2x_polyarchy = "minmax", stay_length = "minmax"),
+                variables = list(v2xed_ed_dmcon = "minmax", timedest = seq(0, 80, 10)),
                 re.form = NULL)
 
 # Plot
 residence.qt.fig <- residence.qt %>%
-  ggplot(aes(x = factor(stay_length, 
-                        levels = c(0, 77), 
-                        labels = c("Min: 0 years", "Max: 77 years")),
+  ggplot(aes(x = timedest,
              y = estimate, 
              ymin = conf.low, ymax = conf.high)) +
   geom_point(stat = "identity", position = position_dodge(width = 0.9), size = 3) +
   geom_linerange(stat = "identity", position = position_dodge(width = 0.9)) +
-  coord_flip() +
-  facet_wrap(~factor(v2x_polyarchy, 
-                     levels = c(0.013, 0.915), 
+  facet_wrap(~factor(v2xed_ed_dmcon, 
+                     levels = c(0.019, 0.942), 
                      labels = c("VDem (min)", "VDem (max)"))) +
-  labs(title = "Predicted democratic attitudes at residence period (in Germany) and VDem (min/max)", 
+  labs(title = "Predicted democratic attitudes at residence period (in Germany) and VDem", 
        subtitle = "Holding covariates constant (mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "", shape = "") +
@@ -370,12 +390,12 @@ residence.qt.fig <- residence.qt %>%
 #### Residence period (CoO) × VDem ----
 residence_coo.pred <- ggeffects::ggpredict(model = model.df %>%
                                          filter(
-                                           sample == "formative years" & 
+                                           sample == "formative years: 15" & 
                                              type == "Random slope") %>%
                                          pull(model) %>% 
                                          .[[1]], 
-                                       terms = c("length_stay_foreign [all]", 
-                                                 "v2x_polyarchy [0:1 by = 0.25]"),
+                                       terms = c("timeorig [all]", 
+                                                 "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                        type = "fe") 
 
 # Plot
@@ -393,29 +413,26 @@ residence_coo.fig <- plot(residence_coo.pred, facets = TRUE, colors = "bw") +
 # Quantity of interest
 residence_coo.qt <- marginaleffects::avg_predictions(model = model.df %>%
                                                    filter(
-                                                     sample == "formative years" & 
+                                                     sample == "formative years: 15" & 
                                                        type == "Random slope") %>%
                                                    pull(model) %>% 
                                                    .[[1]],
                                                  variables = list(
-                                                   v2x_polyarchy = "minmax", 
-                                                   length_stay_foreign = "minmax"),
+                                                   v2xed_ed_dmcon = "minmax", 
+                                                   timeorig = seq(0, 70, 10)),
                                                  re.form = NULL)
 
 # Plot
 residence_coo.qt.fig <- residence_coo.qt %>%
-  ggplot(aes(x = factor(length_stay_foreign, 
-                        levels = c(14, 75), 
-                        labels = c("Min: 14 years", "Max: 75 years")),
+  ggplot(aes(x = timeorig,
              y = estimate, 
              ymin = conf.low, ymax = conf.high)) +
   geom_point(stat = "identity", position = position_dodge(width = 0.9), size = 3) +
   geom_linerange(stat = "identity", position = position_dodge(width = 0.9)) +
-  coord_flip() +
-  facet_wrap(~factor(v2x_polyarchy, 
-                     levels = c(0.013, 0.915), 
+  facet_wrap(~factor(v2xed_ed_dmcon, 
+                     levels = c(0.019, 0.942), 
                      labels = c("VDem (min)", "VDem (max)"))) +
-  labs(title = "Predicted democratic attitudes at residence period (in country of origin) and VDem (min/max)", 
+  labs(title = "Predicted democratic attitudes at residence period (in country of origin) and VDem", 
        subtitle = "Holding covariates constant (mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "", shape = "") +
@@ -441,7 +458,12 @@ residence_comb.fig <- residence.pred %>%
        fill = "Residence period in: ") +
   facet_wrap(~str_c("VDem: ", group)) +
   cowplot::theme_minimal_hgrid() +
-  theme(plot.caption = element_text(hjust = 0))
+  theme(plot.caption = element_text(hjust = 0)) 
+
+# Put legend into empty facet
+residence_comb.fig <- lemon::reposition_legend(residence_comb.fig, 
+                                               position = "center", 
+                                               panel = "panel-3-2")
   
 
 #### Discrimination × VDem ----
@@ -474,27 +496,27 @@ discrimination.fig <- plot(discrimination.pred, facets = T, colors = "bw") +
 # Unit level
 unit.predictions <- predictions(
   model.df %>% 
-    filter(sample == "formative years" & type == "Random slope") %>%
+    filter(sample == "formative years: 15" & type == "Random slope") %>%
     pull(model) %>%
     .[[1]], 
-  newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), iso3c = unique),
+  newdata = datagrid(v2xed_ed_dmcon = seq(0., 1, .25), timeorig = 0:70, iso3c = unique),
   re.form = NULL)
 
 # Population level
 pop.predictions <- predictions(
   model.df %>% 
-    filter(sample == "formative years" & type == "Random slope") %>%
+    filter(sample == "formative years: 15" & type == "Random slope") %>%
     pull(model) %>%
     .[[1]], 
-  newdata = datagrid(v2x_polyarchy = seq(0, 1, .25), stay_length = 0:70),
+  newdata = datagrid(v2xed_ed_dmcon = seq(.1, .9, .2), timeorig = 0:70, iso3c = NA),
   re.form = NA)
 
 # Marginal effects
 avg_margins <- avg_slopes(model.df %>% 
-                            filter(sample == "formative years" & type == "Random slope") %>%
+                            filter(sample == "formative years: 15" & type == "Random slope") %>%
                             pull(model) %>%
                             .[[1]], 
-                          variable = "v2x_polyarchy",
+                          variable = "v2xed_ed_dmcon",
                           re.form = NULL)
 
 # Total sample ----
@@ -578,6 +600,9 @@ ggsave(here("figure", "residence_x_vdem.pdf"), plot = residence_comb.fig,
 
 # Mean democ index
 gtsave(mean.gt, filename = "./figure/mean_democ.png")
+
+# Correlation between VDem measures
+gtsave(vdem_cor.tbl, filename = "./figure/VDem-correlation.png")
 
 # MLM results
 gtsave(mlm.tbl, filename = "./figure/MLM_results.png")

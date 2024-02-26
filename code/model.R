@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
 xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects",
-                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras")
+                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras", "patchwork")
 
 conflicts_prefer(dplyr::filter(),
                  dplyr::select(),
@@ -38,7 +38,7 @@ weighted.ttest.ci <- function(x, weights, conf.level = 0.95) {
 ib22_democ.df <- import(here("data", "ib22_democ.rds"))
 
 # Formative years (cutoff: 15)
-ib22_f15year.df <- import(here("data", "ib22_f15year.rds"))
+ib22_f14year.df <- import(here("data", "ib22_f14year.rds"))
 
 # Formative years (cutoff: 17)
 ib22_f17year.df <- import(here("data", "ib22_f17year.rds"))
@@ -46,8 +46,8 @@ ib22_f17year.df <- import(here("data", "ib22_f17year.rds"))
 # Independent variables: dwf, dpu, dmk, drm, dgg, dme, dra
 # Add mean score of independent variables
 ib_nest.df <- tibble(
-  sample = c("total", "formative years: 15", "formative years: 17"),
-  data = list(ib22_democ.df, ib22_f15year.df, ib22_f17year.df)) %>%
+  sample = c("total", "formative years: 14", "formative years: 17"),
+  data = list(ib22_democ.df, ib22_f14year.df, ib22_f17year.df)) %>%
   mutate(data = map(data, ~.x %>%
                       mutate(democ = rowMeans(across(c(dwf, dpu, dmk, drm, dgg)), 
                                               na.rm = FALSE))))
@@ -154,9 +154,45 @@ mean.gt <- mean.tbl %>%
               columns = c("mean", "95%CI")) %>%
   tab_spanner(label = "95")  
 
+# by VDEM
+democ_vdem.df <- ib_nest.df %>%
+  filter(sample == "formative years: 14") %>%
+  pull(data) %>%
+  .[[1]] %>%
+  mutate(across(starts_with("v2x"), 
+                ~factor(case_when(. <= 0.25 ~ "low",
+                           . > 0.25 & . <= 0.5 ~ "rather low",
+                           . > 0.5 & . <= 0.75 ~ "rather high",
+                           . > 0.75 ~ "high"),
+                        levels = c("low", "rather low", "rather high", "high")),
+                .names = "{.col}_cut"))
+
+# Polyarchy
+poly.fig <- democ_vdem.df %>%
+  filter(!is.na(democ), !is.na(v2x_polyarchy_cut)) %>%
+  ggplot(aes(x = fct_rev(v2x_polyarchy_cut), y = democ, weight = weight)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "Electoral Democracy Index", y = "Democratic Values", title = "Electoral Democracy Index") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"))
+
+# Dmcon
+dmcon.fig <- democ_vdem.df %>%
+  filter(!is.na(democ), !is.na(v2xed_ed_dmcon_cut)) %>%
+  ggplot(aes(x = fct_rev(v2xed_ed_dmcon_cut), y = democ, weight = weight)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "Democratic Indoctrination Index", y = "Democratic Values", title = "Democratic Indoctrination Index") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"))
+
+# Combine
+democ_vdem.fig <- poly.fig + dmcon.fig
+
 # Correlation between VDem measures
 vdem_cor.df <- ib_nest.df %>%
-  filter(sample %in% c("formative years: 15", "formative years: 17")) %>%
+  filter(sample %in% c("formative years: 14", "formative years: 17")) %>%
   mutate(cor.tbl = map(data, ~.x %>%
                          select(contains("v2x"), "weight") %>%
                          collapse::pwcor(X = .[], 
@@ -167,7 +203,7 @@ vdem_cor.df <- ib_nest.df %>%
 
 # Table of correlations in analysis (Sample: formative years)
 vdem_cor.tbl <- vdem_cor.df %>%
-  filter(sample == "formative years: 15") %>%
+  filter(sample == "formative years: 14") %>%
   pull(cor.tbl) %>%
   .[[1]] %>%
   as.data.frame(row.names = c("v2x_polyarchy", "v2x_libdem", "v2x_partipdem", "v2xed_ed_dmcon",
@@ -263,21 +299,29 @@ ib_nest.df <- ib_nest.df %>%
 ## Run models ----
 model.df <- tibble(
   dv = "democ",
-  type = c("Unconditional",
-           "Base", 
-           "Interactions",
-           "Random slope"),
+  type = rep(
+    c("Unconditional",
+      "Base", 
+      "Interactions",
+      "Random slope"), 2),
   iv = c(
     "1 + (1 | iso3c)", 
-    "gender + educ + timedest + timeorig + muslim*religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c)",
-    "gender + educ + muslim*religion_str + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + discrimination + (1 | iso3c)",
-    "gender + educ + muslim*religion_str + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + discrimination + (1 + v2xed_ed_dmcon | iso3c)"))
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
+    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)",
+    "1 + (1 | iso3c)", 
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | iso3c)"),
+  main_iv = c(
+    rep("vdem-poly", 4),
+    rep("vdem-ind", 4)))
 
 # Add different samples
 model.df <- tibble(
-  sample = c("formative years: 15", 
+  sample = c("formative years: 14", 
              "formative years: 17"),
-  data = c("ib_nest.df %>% filter(sample == 'formative years: 15') %>% pull(data) %>% .[[1]]",
+  data = c("ib_nest.df %>% filter(sample == 'formative years: 14') %>% pull(data) %>% .[[1]]",
            "ib_nest.df %>% filter(sample == 'formative years: 17') %>% pull(data) %>% .[[1]]")) %>%
   expand_grid(model.df)
 
@@ -286,7 +330,7 @@ model.df <- tibble(
 model.df <- model.df %>%
   mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
     str_c(..1, " ~ ", ..2),
-    weights = pweights_a,
+    weights = weight,
     data = eval(rlang::parse_expr(..3)))))
 
 # Name list column
@@ -295,12 +339,13 @@ names(model.df$model) <- model.df$type
 ### Model output ----
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
-             model.df[model.df$sample == "formative years: 15",]$model,
+             models = model.df %>% filter(sample == "formative years: 14") %>% pull(model),
              stars = TRUE,
              estimate = "{estimate}{stars}",
              statistic = "({std.error})",
              coef_map = c("(Intercept)" = "Intercept",
                           "genderFemale" = "Gender: Female",
+                          # "age" = "Age",
                           "educmittel" = "Education: medium\n(Ref.: low)",
                           "educhoch" = "Educ.: high",
                           "educSchüler" = "Educ.: in school",
@@ -311,17 +356,29 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                           "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
                           "discriminationhigh" = "Dis.: high",
                           "discriminationvery high" = "Dis.: very high",
-                          "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
-                          "muslimMuslim:religion_str" = "Muslim × Religiosity",
+                          "v2xed_ed_dmcon" = "Political socialization (V-Dem)",
+                          "v2x_polyarchy" = "Political socialization (V-Dem)",
+                          # "muslimMuslim:religion_str" = "Muslim × Religiosity",
                           # "fhYes" = "Close family (country-of-origin)",
                           # "fhYes:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
                           # "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
-                          "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
-                          "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
-                          "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
-                          "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)",
+                          "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × V-Dem",
+                          "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × V-Dem",
+                          "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × V-Dem",
+                          "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × V-Dem",
+                          "timedest:v2x_polyarchy" = "Period of residence (Germany) × V-Dem",
+                          "v2x_polyarchy:timedest" = "Period of residence (Germany) × V-Dem",
+                          "timeorig:v2x_polyarchy" = "Period of residence (CoO) × V-Dem",
+                          "v2x_polyarchy:timeorig" = "Period of residence (CoO) × V-Dem",
+                          # "v2x_polyarchy:discriminationlow" = "Discrimination: low × V-Dem",
+                          # "v2x_polyarchy:discriminationhigh" = "Discrimination: high × V-Dem",
+                          # "v2x_polyarchy:discriminationvery high" = "Discrimination: very high × V-Dem",
+                          # "v2xed_ed_dmcon:discriminationlow" = "Discrimination: low × V-Dem",
+                          # "v2xed_ed_dmcon:discriminationhigh" = "Discrimination: high × V-Dem",
+                          # "v2xed_ed_dmcon:discriminationvery high" = "Discrimination: very high × V-Dem",
                           "SD (Intercept iso3c)" = "SD (Intercept: Country)",
-                          "SD (v2xed_ed_dmcon iso3c)" = "SD (v2xed_ed_dmcon iso3c)",
+                          "SD (v2xed_ed_dmcon iso3c)" = "SD (V-Dem iso3c)",
+                          "SD (v2x_polyarchy iso3c)" = "SD (V-Dem iso3c)",
                           "SD (Observations)" = "SD (Observations)"),
              gof_map = tribble(
                ~raw, ~clean, ~fmt,
@@ -332,160 +389,177 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                "bic", "BIC", 0,
                "icc", "ICC", 2,
                "rmse", "RMSE", 2)) %>%
-  tab_spanner(label = md("**VDem at age 14**"), columns = 2:5) %>%
-#  tab_spanner(label = md("**VDem at year of immigration**"), columns = 6:9) %>%
+  tab_spanner(label = md("**Electoral Democracy**"), columns = 2:5) %>%
+  tab_spanner(label = md("**Democratic Indoctrination**"), columns = 6:9) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
+
+# Plot
+# (needs refinement)
+modelsummary::modelplot(
+  model.df[model.df$sample == "formative years: 15",]$model$`Random slope`,
+  coef_map = c("(Intercept)" = "Intercept",
+               "genderFemale" = "Gender: Female",
+               "educmittel" = "Education: medium\n(Ref.: low)",
+               "educhoch" = "Educ.: high",
+               "educSchüler" = "Educ.: in school",
+               "timedest" = "Period of residence (Germany)",
+               "timeorig" = "Period of residence (Country of origin)",
+               "muslimMuslim" = "Muslim",
+               "religion_str" = "Religiosity",
+               "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
+               "discriminationhigh" = "Dis.: high",
+               "discriminationvery high" = "Dis.: very high",
+               "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
+               "muslimMuslim:religion_str" = "Muslim × Religiosity",
+               # "fhYes" = "Close family (country-of-origin)",
+               # "fhYes:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
+               # "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
+               "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
+               "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
+               "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
+               "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)"))
 
 ### Marginal effects ----
 # Using ggeffects (analogous to marginaleffects::predictions, see below)
 #### Residence period (DEU) × VDem ----
-residence.pred <- ggeffects::ggpredict(model = model.df %>%
+# VDem: Democratic indoctrination
+residence_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                          filter(
-                                           sample == "formative years: 15" & 
-                                             type == "Random slope") %>%
+                                           sample == "formative years: 14",
+                                           type == "Random slope",
+                                           main_iv == "vdem-ind") %>%
                                          pull(model) %>% 
                                          .[[1]], 
                                         terms = c("timedest [all]", 
                                                   "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                        type = "fe") 
 
-# Plot
-residence.fig <- plot(residence.pred, facets = TRUE, colors = "bw") + 
-  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
-  labs(title = "Predicted democratic attitudes by residence period (in Germany) and VDem", 
-       subtitle = "Holding covariates constant (at mean or reference category)",
-       caption = "Source: Integration Barometer 2022; weighted data",
-       x = "", y = "") +
-  facet_wrap(~str_c("VDem: ", group)) +
-  cowplot::theme_minimal_hgrid() +
-  theme(plot.caption = element_text(hjust = 0))
+# VDem: Polyarchy
+residence_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
+                                               filter(
+                                                 sample == "formative years: 14",
+                                                 type == "Random slope",
+                                                 main_iv == "vdem-poly") %>%
+                                               pull(model) %>% 
+                                               .[[1]], 
+                                             terms = c("timedest [all]", 
+                                                       "v2x_polyarchy [0:1 by = 0.25]"),
+                                             type = "fe") 
 
-# Quantity of interest
-residence.qt <- marginaleffects::avg_predictions(model = model.df %>%
-                  filter(
-                    sample == "formative years: 15" & 
-                      type == "Random slope") %>%
-                  pull(model) %>% 
-                  .[[1]],
-                variables = list(v2xed_ed_dmcon = "minmax", timedest = seq(0, 80, 10)),
-                re.form = NULL)
-
-# Plot
-residence.qt.fig <- residence.qt %>%
-  ggplot(aes(x = timedest,
-             y = estimate, 
-             ymin = conf.low, ymax = conf.high)) +
-  geom_point(stat = "identity", position = position_dodge(width = 0.9), size = 3) +
-  geom_linerange(stat = "identity", position = position_dodge(width = 0.9)) +
-  facet_wrap(~factor(v2xed_ed_dmcon, 
-                     levels = c(0.019, 0.942), 
-                     labels = c("VDem (min)", "VDem (max)"))) +
-  labs(title = "Predicted democratic attitudes at residence period (in Germany) and VDem", 
-       subtitle = "Holding covariates constant (mean or reference category)",
-       caption = "Source: Integration Barometer 2022; weighted data",
-       x = "", y = "", shape = "") +
-  cowplot::theme_minimal_grid() +
-  theme(plot.caption = element_text(hjust = 0))
-  
 #### Residence period (CoO) × VDem ----
-residence_coo.pred <- ggeffects::ggpredict(model = model.df %>%
+# VDem: Democratic indoctrination
+residence_coo_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                          filter(
-                                           sample == "formative years: 15" & 
-                                             type == "Random slope") %>%
+                                           sample == "formative years: 14",
+                                           type == "Random slope",
+                                           main_iv == "vdem-ind") %>%
                                          pull(model) %>% 
                                          .[[1]], 
                                        terms = c("timeorig [all]", 
                                                  "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                        type = "fe") 
 
-# Plot
-residence_coo.fig <- plot(residence_coo.pred, facets = TRUE, colors = "bw") + 
-  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
-  labs(title = 
-         "Predicted democratic attitudes by residence period (in country of origin) and VDem", 
-       subtitle = "Holding covariates constant (at mean or reference category)",
-       caption = "Source: Integration Barometer 2022; weighted data",
-       x = "", y = "") +
-  facet_wrap(~str_c("VDem: ", group)) +
-  cowplot::theme_minimal_hgrid() +
-  theme(plot.caption = element_text(hjust = 0))
-
-# Quantity of interest
-residence_coo.qt <- marginaleffects::avg_predictions(model = model.df %>%
-                                                   filter(
-                                                     sample == "formative years: 15" & 
-                                                       type == "Random slope") %>%
-                                                   pull(model) %>% 
-                                                   .[[1]],
-                                                 variables = list(
-                                                   v2xed_ed_dmcon = "minmax", 
-                                                   timeorig = seq(0, 70, 10)),
-                                                 re.form = NULL)
-
-# Plot
-residence_coo.qt.fig <- residence_coo.qt %>%
-  ggplot(aes(x = timeorig,
-             y = estimate, 
-             ymin = conf.low, ymax = conf.high)) +
-  geom_point(stat = "identity", position = position_dodge(width = 0.9), size = 3) +
-  geom_linerange(stat = "identity", position = position_dodge(width = 0.9)) +
-  facet_wrap(~factor(v2xed_ed_dmcon, 
-                     levels = c(0.019, 0.942), 
-                     labels = c("VDem (min)", "VDem (max)"))) +
-  labs(title = "Predicted democratic attitudes at residence period (in country of origin) and VDem", 
-       subtitle = "Holding covariates constant (mean or reference category)",
-       caption = "Source: Integration Barometer 2022; weighted data",
-       x = "", y = "", shape = "") +
-  cowplot::theme_minimal_grid() +
-  theme(plot.caption = element_text(hjust = 0))
+# VDem: Polyarchy
+residence_coo_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
+                                                  filter(
+                                                    sample == "formative years: 14",
+                                                    type == "Random slope",
+                                                    main_iv == "vdem-poly") %>%
+                                                  pull(model) %>% 
+                                                  .[[1]], 
+                                                terms = c("timeorig [all]", 
+                                                          "v2x_polyarchy [0:1 by = 0.25]"),
+                                                type = "fe")
 
 # Residence coo and Germany combined
-residence_comb.fig <- residence.pred %>%
+# VDem: Democratic indoctrination
+residence_comb_vind.fig <- residence_vind.pred %>%
   as.data.frame() %>%
   mutate(where = "Germany") %>%
-  bind_rows(residence_coo.pred %>%
+  bind_rows(residence_coo_vind.pred %>%
               as.data.frame() %>%
               mutate(where = "County of origin")) %>%
-  ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where)) +
-  geom_line(linetype = "dashed") +
+  ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
+  geom_line() +
   geom_ribbon(alpha = .2) + 
   scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  scale_y_continuous(breaks = seq(2.4, 3.0, .2), labels = seq(2.4, 3.0, 0.2)) +
   labs(title = 
-         "Predicted democratic attitudes by residence period and VDem", 
+         "Predicted democratic values by residence period and democratic indoctrination", 
        subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "", 
-       fill = "Residence period in: ") +
+       fill = "Residence period in: ", linetype = "Residence period in: ") +
   facet_wrap(~str_c("VDem: ", group)) +
   cowplot::theme_minimal_hgrid() +
   theme(plot.caption = element_text(hjust = 0)) 
 
 # Put legend into empty facet
-residence_comb.fig <- lemon::reposition_legend(residence_comb.fig, 
+residence_comb_vind.fig <- lemon::reposition_legend(residence_comb_vind.fig, 
                                                position = "center", 
                                                panel = "panel-3-2")
+
+# Residence coo and Germany combined
+residence_comb_vpoly.fig <- residence_vpoly.pred %>%
+  as.data.frame() %>%
+  mutate(where = "Germany") %>%
+  bind_rows(residence_coo_vpoly.pred %>%
+              as.data.frame() %>%
+              mutate(where = "County of origin")) %>%
+  ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
+  geom_line() +
+  geom_ribbon(alpha = .2) + 
+  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  scale_y_continuous(breaks = seq(2.4, 3.0, .2), labels = seq(2.4, 3.0, 0.2)) +
+  labs(title = 
+         "Predicted democratic values by residence period and electoral democracy", 
+       subtitle = "Holding covariates constant (at mean or reference category)",
+       caption = "Source: Integration Barometer 2022; weighted data",
+       x = "", y = "", 
+       fill = "Residence period in: ", linetype = "Residence period in: ") +
+  facet_wrap(~str_c("VDem: ", group)) +
+  cowplot::theme_minimal_hgrid() +
+  theme(plot.caption = element_text(hjust = 0)) 
+
+# Put legend into empty facet
+residence_comb_vpoly.fig <- lemon::reposition_legend(residence_comb_vpoly.fig, 
+                                                    position = "center", 
+                                                    panel = "panel-3-2")
   
 
 #### Discrimination × VDem ----
 discrimination.pred <- ggeffects::ggpredict(model = model.df %>%
                                               filter(
-                                                sample == "formative years" & 
-                                                  type == "Random slope") %>%
+                                                sample == "formative years: 15",
+                                                type == "Random slope",
+                                                main_iv == "vdem-ind") %>%
                                               pull(model) %>% 
                                               .[[1]], 
-                                            terms = c("v2x_polyarchy [all]",
+                                            terms = c("v2xed_ed_dmcon [0:1 by = 0.25]",
                                                       "discrimination [all]"),
                                             type = "fe") 
 
 # Plot 
 discrimination.fig <- plot(discrimination.pred, facets = T, colors = "bw") + 
-  geom_line(linetype = "dashed") +
-  labs(title = "Predicted democratic attitudes by perceived discrimination and VDem", 
+  labs(title = "Predicted democratic values by perceived discrimination and democratic indoctrination", 
        subtitle = "Holding covariates constant (mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "") +
   facet_wrap(~fct_relabel(group, ~str_c("Discrimination: ", .x))) +
   scale_y_continuous(breaks = seq(2.4, 3, .2), limits = c(2.3, 3)) +
+  cowplot::theme_minimal_hgrid() +
+  theme(plot.caption = element_text(hjust = 0))
+
+# 
+discrimination.pred %>%
+  ggplot(aes(x = group, y = predicted, ymin = conf.low, ymax = conf.high)) +
+  geom_pointrange() +
+  labs(title = 
+         "Predicted democratic attitudes by residence period (in country of origin) and VDem", 
+       subtitle = "Holding covariates constant (at mean or reference category)",
+       caption = "Source: Integration Barometer 2022; weighted data",
+       x = "", y = "") +
+  facet_wrap(~str_c("VDem: ", x)) +
   cowplot::theme_minimal_hgrid() +
   theme(plot.caption = element_text(hjust = 0))
 
@@ -495,11 +569,14 @@ discrimination.fig <- plot(discrimination.pred, facets = T, colors = "bw") +
 # re.form if NULL include all random effects, if NA include no random effects
 # Unit level
 unit.predictions <- predictions(
-  model.df %>% 
-    filter(sample == "formative years: 15" & type == "Random slope") %>%
-    pull(model) %>%
+  model.df %>%
+    filter(
+      sample == "formative years: 15",
+      type == "Random slope",
+      main_iv == "vdem-ind") %>%
+    pull(model) %>% 
     .[[1]], 
-  newdata = datagrid(v2xed_ed_dmcon = seq(0., 1, .25), timeorig = 0:70, iso3c = unique),
+  newdata = datagrid(v2x_polyarchy = seq(0., 1, .25), timeorig = 0:70, iso3c = unique),
   re.form = NULL)
 
 # Population level
@@ -586,15 +663,17 @@ full_sample_result.tbl <- modelsummary(title = md("**Linear Regression Model for
 muslim_religiosity.fig <- interactions::interact_plot(full_sample.mod, modx = "muslim", pred = "religion_str", interval = T)
 
 # Export ----
-ggsave(here("figure", "residence_ger_x_vdem.pdf"), plot = residence.fig, 
+ggsave(here("figure", "democ_by_vdem.pdf"), plot = democ_vdem.fig,
+       dpi = 300, device = cairo_pdf,
+       width = 25, height = 15, units = "cm")
+
+# Democratic indoctrination
+ggsave(here("figure", "residence_x_vdem-ind.pdf"), plot = residence_comb_vind.fig,
        dpi = 300, device = cairo_pdf, 
        width = 25, height = 14, units = "cm")
 
-ggsave(here("figure", "residence_coo_x_vdem.pdf"), plot = residence_coo.fig,
-       dpi = 300, device = cairo_pdf, 
-       width = 25, height = 14, units = "cm")
-
-ggsave(here("figure", "residence_x_vdem.pdf"), plot = residence_comb.fig,
+# Electoral democracy
+ggsave(here("figure", "residence_x_vdem-poly.pdf"), plot = residence_comb_vpoly.fig,
        dpi = 300, device = cairo_pdf, 
        width = 25, height = 14, units = "cm")
 
@@ -605,15 +684,19 @@ gtsave(mean.gt, filename = "./figure/mean_democ.png")
 gtsave(vdem_cor.tbl, filename = "./figure/VDem-correlation.png")
 
 # MLM results
-gtsave(mlm.tbl, filename = "./figure/MLM_results.png")
+gtsave(mlm.tbl, filename = "./figure/MLM_results.rtf")
 
-# Full sample results
-gtsave(full_sample_result.tbl, filename = "./figure/FullSample_results.png")
+# Export IB22
+export(ib_nest.df %>%
+         filter(sample == "formative years: 14") %>%
+         select(data) %>%
+         pull(data) %>%
+         .[[1]] %>%
+         select(a_recno, a_datum, weight, pweights_a, pweights_b, iso3c, gender, educ, muslim, religion_str, discrimination, 
+                timedest, timeorig, starts_with("v2x")) %>%
+         tibble(), file = here("data", "ib22_analysis-sample.dta"))
 
-# Interaction
-ggsave(here("figure", "religion_religiosity_interaction_fullsample.pdf"), 
-       plot = muslim_religiosity.fig, 
+# 
+ggsave(here("figure", "democ_discrimination_ind.pdf"), plot = discrimination.fig,
        dpi = 300, device = cairo_pdf, 
-       width = 20, height = 14, units = "cm")
-
-
+       width = 25, height = 14, units = "cm")

@@ -122,15 +122,15 @@ ib22_democ.df <- ib22_democ.df %>%
                                               "Tuerkei" = "TUR")))
 
 # Join
-# VDem at formative year (age: 14 years, cutoff: age 15)
-ib22_f15year.df <- ib22_democ.df %>%
+# VDem at formative year (age: 14 years, cutoff: age 16)
+ib22_f14year.df <- ib22_democ.df %>%
   mutate(
     # Year when individual turned 14
     formative_year = year(ymd(a_datum)) - age + 14,
-    # Migration before or after turning 15
+    # Migration before or after turning 16
     formative_before_mig = case_when(
-      formative_year + 1 - wandjahr > 0 ~ "no",   # migrated before turning 15 --> exclude
-      formative_year + 1 - wandjahr <= 0 ~ "yes", # migrated after turning 15 --> include
+      formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 16 --> exclude
+      formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 16 --> include
       TRUE ~ NA_character_),
     # Residence year in country of origin since turning 14
     timeorig = (formative_year - wandjahr) * -1,
@@ -216,9 +216,9 @@ ib22_f17year.df <- ib22_democ.df %>%
 # All respondents
 export(ib22_democ.df, here("data", "ib22_democ.rds"))
 
-# VDem by formative years (cutoff: 15)
-export(ib22_f15year.df, here("data", "ib22_f15year.rds"))
+# VDem by formative years (cutoff: 16)
+export(ib22_f14year.df, here("data", "ib22_f14year.rds"))
 
-# VDem by formative years (cutoff: 15)
+# VDem by formative years (cutoff: 17)
 export(ib22_f17year.df, here("data", "ib22_f17year.rds"))
 

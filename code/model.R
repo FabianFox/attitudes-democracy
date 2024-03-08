@@ -692,9 +692,9 @@ export(ib_nest.df %>%
          select(data) %>%
          pull(data) %>%
          .[[1]] %>%
-         select(a_recno, a_datum, weight, pweights_a, pweights_b, iso3c, gender, educ, muslim, religion_str, discrimination, 
+         select(a_recno, a_datum, weight, pweights_a, pweights_b, democ, iso3c, gender, educ, muslim, religion_str, discrimination, 
                 timedest, timeorig, starts_with("v2x")) %>%
-         tibble(), file = here("data", "ib22_analysis-sample.dta"))
+         tibble(), file = here("data", "ib22-analysis-sample", "ib22_analysis-sample.dta"))
 
 # 
 ggsave(here("figure", "democ_discrimination_ind.pdf"), plot = discrimination.fig,

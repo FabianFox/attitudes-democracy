@@ -43,22 +43,25 @@ ess_democ.df <- ess_democ.orig %>%
                 ~factor(tolower(sjlabelled::as_character(.)),
                 levels = c("non-migrant", "low", "rather low", "rather high", "high"))))
 
+# Democratic values by VDem value in the country-of-origin
 # Polyarchy
 poly_ess.fig <- ess_democ.df %>%
   filter(!is.na(demo1), !is.na(v2x_polyarchy_4nat)) %>%
   ggplot(aes(x = fct_rev(v2x_polyarchy_4nat), y = demo1, weight = anweight)) +
   geom_boxplot() +
   coord_flip() +
+  scale_y_continuous(breaks = seq(0, 10, 2)) +
   labs(x = "Electoral Democracy Index", y = "Democratic Values", title = "Electoral Democracy Index") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"))
 
 # Dmcon
-dmcon_ess.fig <-ess_democ.df %>%
+dmcon_ess.fig <- ess_democ.df %>%
   filter(!is.na(demo1), !is.na(v2xed_ed_dmcon_4nat)) %>%
   ggplot(aes(x = fct_rev(v2xed_ed_dmcon_4nat), y = demo1, weight = anweight)) +
   geom_boxplot() +
   coord_flip() +
+  scale_y_continuous(breaks = seq(0, 10, 2)) +
   labs(x = "Democratic Indoctrination Index", y = "Democratic Values", title = "Democratic Indoctrination Index") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"))
@@ -70,8 +73,9 @@ democ_vdem_ess.fig <- poly_ess.fig + dmcon_ess.fig
 ess_democ_mod.df <- ess_democ.df %>%
   filter(first_gen == 1) %>%
   select(gender = gndr, educ = edulvlb, discrimination = discri, religion_str = religiosity, 
-         democ = demo1, iso3c = country_text_id, weight = anweight, v2x_polyarchy, v2xed_ed_dmcon,
-         muslim, timedest, timeorig, cntry) %>%
+         democ = demo1, iso3c = country_text_id, weight = anweight, v2x_polyarchy, v2x_libdem,
+         v2x_partipdem, v2xed_ed_dmcon, v2xed_ed_ptcon, v2xed_ptcon, muslim, timedest, timeorig, 
+         cntry) %>%
   mutate(
     muslim = factor(muslim, levels = c(0, 1), 
                     labels = c("Other", "Muslim")),
@@ -93,6 +97,25 @@ ess_democ_mod.df <- ess_democ.df %>%
                       .default = NA_character_),
     educ = factor(educ, levels = c("ISCED 2 and lower", "ISCED 3", "ISCED 4 and 5A/B short", 
                                    "ISCED 5 medium and higher")))
+
+# Correlation of VDem
+# Correlation between VDem measures
+vdem_ess_cor.df <- ess_democ_mod.df %>%
+  select(contains("v2x"), "weight") %>%
+  collapse::pwcor(X = .[], 
+                  use = "pairwise.complete.obs",
+                  w = .$weight) %>%
+  # remove weights
+  .[-7, -7]
+
+# Table of correlations in analysis (Sample: formative years)
+vdem_ess_cor.tbl <- vdem_ess_cor.df %>%
+  as.data.frame(row.names = c("v2x_polyarchy", "v2x_libdem", "v2x_partipdem", "v2xed_ed_dmcon",
+                              "v2xed_ed_ptcon", "v2xed_ptcon")) %>%
+  gt(rownames_to_stub = TRUE) %>%
+  tab_header(title = md("Correlation table")) %>%
+  tab_source_note(source_note = md("**Source**: ESS10; weighted")) %>%
+  fmt_number(decimals = 3)
 
 # Hierachical model ----
 ### Rescale weights ----
@@ -128,6 +151,7 @@ model.df <- tibble(
 model.df <- model.df %>%
   mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
     str_c(..1, " ~ ", ..2),
+    REML = TRUE,
     weights = weight,
     data = eval(rlang::parse_expr(..3)))))
 
@@ -191,7 +215,7 @@ residence_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                                 main_iv == "vdem-ind") %>%
                                               pull(model) %>% 
                                               .[[1]], 
-                                            terms = c("timedest [all]", 
+                                            terms = c("timedest [0:70]", 
                                                       "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                             type = "fe") 
 
@@ -202,7 +226,7 @@ residence_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
                                                  main_iv == "vdem-poly") %>%
                                                pull(model) %>% 
                                                .[[1]], 
-                                             terms = c("timedest [all]", 
+                                             terms = c("timedest [0:70]", 
                                                        "v2x_polyarchy [0:1 by = 0.25]"),
                                              type = "fe") 
 
@@ -214,7 +238,7 @@ residence_coo_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                                     main_iv == "vdem-ind") %>%
                                                   pull(model) %>% 
                                                   .[[1]], 
-                                                terms = c("timeorig [all]", 
+                                                terms = c("timeorig [0:80]", 
                                                           "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                                 type = "fe") 
 
@@ -225,7 +249,7 @@ residence_coo_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
                                                      main_iv == "vdem-poly") %>%
                                                    pull(model) %>% 
                                                    .[[1]], 
-                                                 terms = c("timeorig [all]", 
+                                                 terms = c("timeorig [0:80]", 
                                                            "v2x_polyarchy [0:1 by = 0.25]"),
                                                  type = "fe")
 
@@ -240,7 +264,7 @@ residence_comb_vind.fig <- residence_vind.pred %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 
-  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  scale_x_continuous(breaks = seq(0, 75, 10), labels = seq(0, 75, 10)) +
   scale_y_continuous(breaks = seq(7.5, 9.5, .5), labels = seq(7.5, 9.5, .5)) +
   labs(title = 
          "Predicted democratic values by residence period and democratic indoctrination", 
@@ -267,7 +291,7 @@ residence_comb_vpoly.fig <- residence_vpoly.pred %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 
-  scale_x_continuous(breaks = seq(0, 90, 10), labels = seq(0, 90, 10)) +
+  scale_x_continuous(breaks = seq(0, 75, 10), labels = seq(0, 75, 10)) +
   scale_y_continuous(breaks = seq(7.5, 9.5, .5), labels = seq(7.5, 9.5, .5)) +
   labs(title = 
          "Predicted democratic values by residence period and electoral democracy", 
@@ -302,3 +326,5 @@ ggsave(here("figure", "ESS", "residence_x_vdem-poly_ess.png"), plot = residence_
 
 # MLM results
 gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results_ess_weighted.png")
+
+gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results.rtf")

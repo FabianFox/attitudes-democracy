@@ -159,16 +159,31 @@ democ_vdem.df <- ib_nest.df %>%
   filter(sample == "formative years: 14") %>%
   pull(data) %>%
   .[[1]] %>%
-  mutate(across(starts_with("v2x"), 
-                ~factor(case_when(. <= 0.25 ~ "low",
-                           . > 0.25 & . <= 0.5 ~ "rather low",
-                           . > 0.5 & . <= 0.75 ~ "rather high",
-                           . > 0.75 ~ "high"),
-                        levels = c("low", "rather low", "rather high", "high")),
+  mutate(
+    across(starts_with("v2x"), 
+           ~factor(case_when(. <= 0.25 ~ "low",
+                             . > 0.25 & . <= 0.5 ~ "rather low",
+                             . > 0.5 & . <= 0.75 ~ "rather high",
+                             . > 0.75 ~ "high",
+                             .default = NA_character_),
+                   levels = c("non-migrant", "low", "rather low", "rather high", "high")),
                 .names = "{.col}_cut"))
+
+# Add non-migrants
+democ_vdem_nonmig.df <- ib_nest.df %>%
+  filter(sample == "total") %>% 
+  pull(data) %>%
+  .[[1]] %>%
+  filter(migra == 1, a_recno != 210084983) %>% # Remove single duplicated individual (wandjahr == 1945)
+  mutate(
+    v2x_polyarchy_cut = factor(ifelse(migra == 1, "non-migrant", NA_character_),
+                        levels = c("non-migrant", "low", "rather low", "rather high", "high")),
+    v2xed_ed_dmcon_cut = factor(ifelse(migra == 1, "non-migrant", NA_character_),
+                             levels = c("non-migrant", "low", "rather low", "rather high", "high")))
 
 # Polyarchy
 poly.fig <- democ_vdem.df %>%
+  bind_rows(democ_vdem_nonmig.df) %>%
   filter(!is.na(democ), !is.na(v2x_polyarchy_cut)) %>%
   ggplot(aes(x = fct_rev(v2x_polyarchy_cut), y = democ, weight = weight)) +
   geom_boxplot() +
@@ -179,6 +194,7 @@ poly.fig <- democ_vdem.df %>%
 
 # Dmcon
 dmcon.fig <- democ_vdem.df %>%
+  bind_rows(democ_vdem_nonmig.df) %>%
   filter(!is.na(democ), !is.na(v2xed_ed_dmcon_cut)) %>%
   ggplot(aes(x = fct_rev(v2xed_ed_dmcon_cut), y = democ, weight = weight)) +
   geom_boxplot() +
@@ -330,7 +346,8 @@ model.df <- tibble(
 model.df <- model.df %>%
   mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
     str_c(..1, " ~ ", ..2),
-    weights = weight,
+    REML = TRUE,
+    weights = pweights_a, # or pweights_a
     data = eval(rlang::parse_expr(..3)))))
 
 # Name list column
@@ -663,18 +680,18 @@ full_sample_result.tbl <- modelsummary(title = md("**Linear Regression Model for
 muslim_religiosity.fig <- interactions::interact_plot(full_sample.mod, modx = "muslim", pred = "religion_str", interval = T)
 
 # Export ----
-ggsave(here("figure", "democ_by_vdem.pdf"), plot = democ_vdem.fig,
-       dpi = 300, device = cairo_pdf,
+ggsave(here("figure", "IB", "democ_by_vdem.png"), plot = democ_vdem.fig,
+       dpi = 300, device = ragg::agg_png, background = "white",
        width = 25, height = 15, units = "cm")
 
 # Democratic indoctrination
-ggsave(here("figure", "residence_x_vdem-ind.pdf"), plot = residence_comb_vind.fig,
-       dpi = 300, device = cairo_pdf, 
+ggsave(here("figure", "IB", "residence_x_vdem-ind.png"), plot = residence_comb_vind.fig,
+       dpi = 300, device = ragg::agg_png, background = "white",
        width = 25, height = 14, units = "cm")
 
 # Electoral democracy
-ggsave(here("figure", "residence_x_vdem-poly.pdf"), plot = residence_comb_vpoly.fig,
-       dpi = 300, device = cairo_pdf, 
+ggsave(here("figure", "IB", "residence_x_vdem-poly.png"), plot = residence_comb_vpoly.fig,
+       dpi = 300, device = ragg::agg_png, background = "white",
        width = 25, height = 14, units = "cm")
 
 # Mean democ index
@@ -684,7 +701,7 @@ gtsave(mean.gt, filename = "./figure/mean_democ.png")
 gtsave(vdem_cor.tbl, filename = "./figure/VDem-correlation.png")
 
 # MLM results
-gtsave(mlm.tbl, filename = "./figure/MLM_results.rtf")
+gtsave(mlm.tbl, filename = "./figure/IB/MLM_results.rtf")
 
 # Export IB22
 export(ib_nest.df %>%

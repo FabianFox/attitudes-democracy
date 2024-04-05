@@ -92,7 +92,8 @@ ib_nest.df <- ib_nest.df %>%
 
 # Description ----
 # ------------------------------------------------------------------------------------------------ #
-# Mean by natives, first and second generation
+## Summary statistics ----
+### Mean ----
 mean.df <- ib_nest.df %>%
   filter(sample == "total") %>%
   pull(data) %>%
@@ -154,7 +155,57 @@ mean.gt <- mean.tbl %>%
               columns = c("mean", "95%CI")) %>%
   tab_spanner(label = "95")  
 
-# by VDEM
+### Demo: Single items ----
+items_democ.gt <- ib_nest.df %>%
+  filter(sample == "total") %>%
+  pull(data) %>%
+  .[[1]] %>%
+  mutate(
+    mig_type = case_when(
+      migra == 1 | migra != 1 & iso3c == "DEU" ~ "Non-migrant",
+      migra != 1 & iso3c != "DEU" ~ "First-generation",
+      TRUE ~ NA_character_)) %>%
+  group_by(first_gen = factor(mig_type, 
+                              labels = c("First-generation", "Non-migrant")), 
+           .add = TRUE) %>%
+  reframe(across(c(dwf, dpu, dmk, drm, dgg),
+                 list(mean = ~wtd.mean(.x, weights = weight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = weight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "dwf" ~ "Fair elections",
+                               "dpu" ~ "Party competition",
+                               "dmk" ~ "Free media",
+                               "drm" ~ "Protected minorities",
+                               "dgg" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+# Boxplot: Democ
+demo_boxplot_ib.fig <- ib_nest.df %>%
+  filter(sample == "total") %>%
+  pull(data) %>%
+  .[[1]] %>%
+  mutate(
+    mig_type = case_when(
+      migra == 1 | migra != 1 & iso3c == "DEU" ~ "Non-migrant",
+      migra != 1 & iso3c != "DEU" ~ "First-generation",
+      TRUE ~ NA_character_)) %>%
+  ggplot(aes(x = mig_type, y = democ, weight = weight)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "", y = "Democratic Values", title = "") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"))
+
+### by VDEM ----
+#### Plots ----
 democ_vdem.df <- ib_nest.df %>%
   filter(sample == "formative years: 14") %>%
   pull(data) %>%
@@ -206,7 +257,78 @@ dmcon.fig <- democ_vdem.df %>%
 # Combine
 democ_vdem.fig <- poly.fig + dmcon.fig
 
-# Correlation between VDem measures
+#### Table ----
+# Polyarchy
+items_democ_poly_ib.gt <- ib_nest.df %>%
+  filter(sample == "formative years: 14") %>%
+  pull(data) %>%
+  .[[1]] %>%
+  mutate(
+    across(starts_with("v2x"), 
+           ~factor(case_when(. <= 0.25 ~ "low",
+                             . > 0.25 & . <= 0.5 ~ "rather low",
+                             . > 0.5 & . <= 0.75 ~ "rather high",
+                             . > 0.75 ~ "high",
+                             .default = NA_character_),
+                   levels = c("low", "rather low", "rather high", "high")),
+           .names = "{.col}_cut")) %>%
+  filter(!is.na(v2x_polyarchy_cut)) %>%
+  group_by(v2x_polyarchy_cut) %>%
+  reframe(across(c(dwf, dpu, dmk, drm, dgg),
+                 list(mean = ~wtd.mean(.x, weights = weight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = weight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "dwf" ~ "Fair elections",
+                               "dpu" ~ "Party competition",
+                               "dmk" ~ "Free media",
+                               "drm" ~ "Protected minorities",
+                               "dgg" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+# Indoctrination
+items_democ_ind_ib.gt <- ib_nest.df %>%
+  filter(sample == "formative years: 14") %>%
+  pull(data) %>%
+  .[[1]] %>%
+  mutate(
+    across(starts_with("v2x"), 
+           ~factor(case_when(. <= 0.25 ~ "low",
+                             . > 0.25 & . <= 0.5 ~ "rather low",
+                             . > 0.5 & . <= 0.75 ~ "rather high",
+                             . > 0.75 ~ "high",
+                             .default = NA_character_),
+                   levels = c("low", "rather low", "rather high", "high")),
+           .names = "{.col}_cut")) %>%
+  filter(!is.na(v2xed_ed_dmcon_cut)) %>%
+  group_by(v2xed_ed_dmcon_cut) %>%
+  reframe(across(c(dwf, dpu, dmk, drm, dgg),
+                 list(mean = ~wtd.mean(.x, weights = weight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = weight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "dwf" ~ "Fair elections",
+                               "dpu" ~ "Party competition",
+                               "dmk" ~ "Free media",
+                               "drm" ~ "Protected minorities",
+                               "dgg" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+### Correlation between VDem measures ----
 vdem_cor.df <- ib_nest.df %>%
   filter(sample %in% c("formative years: 14", "formative years: 17")) %>%
   mutate(cor.tbl = map(data, ~.x %>%
@@ -347,7 +469,7 @@ model.df <- model.df %>%
   mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
     str_c(..1, " ~ ", ..2),
     REML = TRUE,
-    weights = pweights_a, # or pweights_a
+    weights = weight, # or pweights_a
     data = eval(rlang::parse_expr(..3)))))
 
 # Name list column
@@ -413,7 +535,7 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
 # Plot
 # (needs refinement)
 modelsummary::modelplot(
-  model.df[model.df$sample == "formative years: 15",]$model$`Random slope`,
+  model.df[model.df$sample == "formative years: 14",]$model$`Random slope`,
   coef_map = c("(Intercept)" = "Intercept",
                "genderFemale" = "Gender: Female",
                "educmittel" = "Education: medium\n(Ref.: low)",
@@ -717,3 +839,17 @@ export(ib_nest.df %>%
 ggsave(here("figure", "democ_discrimination_ind.pdf"), plot = discrimination.fig,
        dpi = 300, device = cairo_pdf, 
        width = 25, height = 14, units = "cm")
+
+# Appendix
+ggsave(here("figure", "IB", "Democ-boxplot-IB.png"), plot = demo_boxplot_ib.fig,
+       dpi = 300, device = ragg::agg_png(),
+       width = 25, height = 15, units = "cm")
+
+gtsave(items_democ.gt, filename = here("figure", "IB", "Demo-items_IB.rtf"))
+
+# 
+gtsave(items_democ_poly_ib.gt, filename = here("figure", "IB", "Demo-VDem-Poly_IB.rtf"))
+gtsave(items_democ_ind_ib.gt, filename = here("figure", "IB", "Demo-VDem-Ind_IB.rtf"))
+
+#
+gtsave(vdem_cor.tbl, filename = here("figure", "IB", "VDem-Correlation.rtf"))

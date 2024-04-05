@@ -4,7 +4,7 @@
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
-xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects",
+xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects", "lme4",
                   "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras", "patchwork")
 
 conflicts_prefer(dplyr::filter(),
@@ -43,7 +43,94 @@ ess_democ.df <- ess_democ.orig %>%
                 ~factor(tolower(sjlabelled::as_character(.)),
                 levels = c("non-migrant", "low", "rather low", "rather high", "high"))))
 
-# Democratic values by VDem value in the country-of-origin
+# Description ----
+## By VDem ----
+### DV: Single items ----
+items_democ_ess.gt <- ess_democ.df %>%
+  group_by(first_gen = factor(first_gen, 
+                              levels = c(1, 0), 
+                              labels = c("First-generation", "Non-migrant")), .add = TRUE) %>%
+  reframe(across(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa),
+                 list(mean = ~wtd.mean(.x, weights = anweight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = anweight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "fairelc" ~ "Fair elections",
+                               "dfprtal" ~ "Party competition",
+                               "medcrgv" ~ "Free media",
+                               "rghmgpr" ~ "Protected minorities",
+                               "cttresa" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+### Tables ----
+# Polyarchy
+items_democ_poly_ess.gt <- ess_democ.df %>%
+  filter(first_gen == 1, 
+         !is.na(v2x_polyarchy_4nat)) %>%
+  group_by(v2x_polyarchy_4nat) %>%
+  reframe(across(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa),
+                 list(mean = ~wtd.mean(.x, weights = anweight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = anweight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "fairelc" ~ "Fair elections",
+                               "dfprtal" ~ "Party competition",
+                               "medcrgv" ~ "Free media",
+                               "rghmgpr" ~ "Protected minorities",
+                               "cttresa" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+# Indoctrination
+items_democ_ind_ess.gt <- ess_democ.df %>%
+  filter(first_gen == 1, 
+         !is.na(v2xed_ed_dmcon_4nat)) %>%
+  group_by(v2xed_ed_dmcon_4nat) %>%
+  reframe(across(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa),
+                 list(mean = ~wtd.mean(.x, weights = anweight, na.rm = TRUE),
+                      sd = ~sqrt(wtd.var(.x, weights = anweight, na.rm = TRUE)),
+                      min = ~min(.x, na.rm = TRUE),
+                      max = ~max(.x, na.rm = TRUE)), .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = 2:21,
+               names_to = c("variable", "type"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(variable = case_match(variable,
+                               "fairelc" ~ "Fair elections",
+                               "dfprtal" ~ "Party competition",
+                               "medcrgv" ~ "Free media",
+                               "rghmgpr" ~ "Protected minorities",
+                               "cttresa" ~ "Equality courts")) %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  gt() %>%
+  fmt_number(decimals = 2, drop_trailing_zeros = TRUE)
+
+## Boxplot: Demo1 ----
+demo_boxplot_ess.fig <- ess_democ.df %>%
+  mutate(first_gen = factor(first_gen, 
+                   levels = c(1, 0), 
+                   labels = c("First-generation", "Non-migrant"))) %>%
+  ggplot(aes(x = first_gen, y = demo1, weight = anweight)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "", y = "Democratic Values", title = "") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"))
+
+## Democratic Values by VDem in CoO ----
 # Polyarchy
 poly_ess.fig <- ess_democ.df %>%
   filter(!is.na(demo1), !is.na(v2x_polyarchy_4nat)) %>%
@@ -69,6 +156,7 @@ dmcon_ess.fig <- ess_democ.df %>%
 # Combine
 democ_vdem_ess.fig <- poly_ess.fig + dmcon_ess.fig
 
+## Prepare ----
 # Reduce data to individuals with migback and rename variables
 ess_democ_mod.df <- ess_democ.df %>%
   filter(first_gen == 1) %>%
@@ -86,8 +174,9 @@ ess_democ_mod.df <- ess_democ.df %>%
       TRUE ~ NA_character_),
     discrimination = factor(discrimination, 
                             levels = c("no", "yes")),
+    gender = gender - 1,
     gender = factor(gender, 
-                    levels = c(1, 2), 
+                    levels = c(0, 1), 
                     labels = c("Male", "Female")),
     educ = case_match(educ,
                       c(0, 113, 129, 212, 213, 221, 222, 223) ~ "ISCED 2 and lower",
@@ -96,9 +185,10 @@ ess_democ_mod.df <- ess_democ.df %>%
                       c(610, 620, 710, 720, 800) ~ "ISCED 5 medium and higher",
                       .default = NA_character_),
     educ = factor(educ, levels = c("ISCED 2 and lower", "ISCED 3", "ISCED 4 and 5A/B short", 
-                                   "ISCED 5 medium and higher")))
+                                   "ISCED 5 medium and higher")),
+    timeorig = timeorig - 14) # Count from zero since age 14 (just like in IB analysis)
 
-# Correlation of VDem
+## Correlations of VDem ----
 # Correlation between VDem measures
 vdem_ess_cor.df <- ess_democ_mod.df %>%
   select(contains("v2x"), "weight") %>%
@@ -117,14 +207,7 @@ vdem_ess_cor.tbl <- vdem_ess_cor.df %>%
   tab_source_note(source_note = md("**Source**: ESS10; weighted")) %>%
   fmt_number(decimals = 3)
 
-# Hierachical model ----
-### Rescale weights ----
-#ess_democ_mod.df <- ess_democ_mod.df %>%
-#  datawizard::rescale_weights(group = c("iso3c", "cntry"), 
-#                              probability_weights = "weight",
-#                              nest = TRUE)
-
-## Run models ----
+# Run models ----
 model.df <- tibble(
   dv = "democ",
   type = rep(
@@ -133,14 +216,14 @@ model.df <- tibble(
       "Interactions",
       "Random slope"), 2),
   iv = c(
-    "1 + (1 | iso3c) + (1 | cntry)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | iso3c) + (1 | cntry)",
-    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | iso3c) + (1 | cntry)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | iso3c) + (1 + v2x_polyarchy | cntry)",
-    "1 + (1 | iso3c) + (1 | cntry)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c)  + (1 | cntry)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | iso3c) + (1 | cntry)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | iso3c)  + (1 + v2xed_ed_dmcon | cntry)"),
+    "1 + (1 | cntry/iso3c)", 
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | cntry/iso3c)",
+    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | cntry/iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | cntry/iso3c)",
+    "1 + (1 | cntry/iso3c)", 
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | cntry/iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | cntry/iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | cntry/iso3c)"),
   main_iv = c(
     rep("vdem-poly", 4),
     rep("vdem-ind", 4)),
@@ -149,9 +232,11 @@ model.df <- tibble(
 # Run models
 # VDem at year of immigration
 model.df <- model.df %>%
-  mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
+  mutate(model = pmap(list(dv, iv, data), ~lmer(
     str_c(..1, " ~ ", ..2),
     REML = TRUE,
+    control = lmerControl(optimizer = "optimx", 
+                          optCtrl = list(method = "nlminb")),
     weights = weight,
     data = eval(rlang::parse_expr(..3)))))
 
@@ -187,10 +272,13 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                                      "v2x_polyarchy:timeorig" = "Period of residence (CoO) × V-Dem",
                                      "SD (Intercept iso3c)" = "SD (Intercept: CoO)",
                                      "SD (Intercept cntry)" = "SD (Intercept: CoD)",
+                                     "SD (Intercept iso3ccntry)" = "SD (Intercept CoD/CoO)",
                                      "SD (v2xed_ed_dmcon iso3c)" = "SD (V-Dem CoO)",
                                      "SD (v2xed_ed_dmcon cntry)" = "SD (V-Dem CoD)",
+                                     "SD (v2xed_ed_dmcon iso3ccntry)" = "SD (V-Dem CoD/CoO)",
                                      "SD (v2x_polyarchy iso3c)" = "SD (V-Dem CoO)",
                                      "SD (v2x_polyarchy cntry)" = "SD (V-Dem CoD)",
+                                     "SD (v2x_polyarchy iso3ccntry)" = "SD (V-Dem CoD/CoO)",
                                      "SD (Observations)" = "SD (Observations)"),
                         gof_map = tribble(
                           ~raw, ~clean, ~fmt,
@@ -215,7 +303,7 @@ residence_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                                 main_iv == "vdem-ind") %>%
                                               pull(model) %>% 
                                               .[[1]], 
-                                            terms = c("timedest [0:70]", 
+                                            terms = c("timedest [all]", 
                                                       "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                             type = "fe") 
 
@@ -226,7 +314,7 @@ residence_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
                                                  main_iv == "vdem-poly") %>%
                                                pull(model) %>% 
                                                .[[1]], 
-                                             terms = c("timedest [0:70]", 
+                                             terms = c("timedest [all]", 
                                                        "v2x_polyarchy [0:1 by = 0.25]"),
                                              type = "fe") 
 
@@ -238,7 +326,7 @@ residence_coo_vind.pred <- ggeffects::ggpredict(model = model.df %>%
                                                     main_iv == "vdem-ind") %>%
                                                   pull(model) %>% 
                                                   .[[1]], 
-                                                terms = c("timeorig [0:80]", 
+                                                terms = c("timeorig [all]", 
                                                           "v2xed_ed_dmcon [0:1 by = 0.25]"),
                                                 type = "fe") 
 
@@ -249,7 +337,7 @@ residence_coo_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
                                                      main_iv == "vdem-poly") %>%
                                                    pull(model) %>% 
                                                    .[[1]], 
-                                                 terms = c("timeorig [0:80]", 
+                                                 terms = c("timeorig [all]", 
                                                            "v2x_polyarchy [0:1 by = 0.25]"),
                                                  type = "fe")
 
@@ -328,3 +416,16 @@ ggsave(here("figure", "ESS", "residence_x_vdem-poly_ess.png"), plot = residence_
 gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results_ess_weighted.png")
 
 gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results.rtf")
+
+# Appendix
+ggsave(here("figure", "ESS", "Democ-boxplot-ESS.png"), plot = demo_boxplot_ess.fig,
+       dpi = 300, device = ragg::agg_png(),
+       width = 25, height = 15, units = "cm")
+
+gtsave(items_democ_ess.gt, filename = here("figure", "ESS", "Demo-items.rtf"))
+
+# 
+gtsave(items_democ_poly_ess.gt, filename = here("figure", "ESS", "Demo-VDem-Poly_ESS.rtf"))
+gtsave(items_democ_ind_ess.gt, filename = here("figure", "ESS", "Demo-VDem-Ind_ESS.rtf"))
+
+gtsave(vdem_ess_cor.tbl, filename = here("figure", "ESS", "VDem-Correlation_ESS.rtf"))

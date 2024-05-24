@@ -482,6 +482,7 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
              stars = TRUE,
              estimate = "{estimate}{stars}",
              statistic = "({std.error})",
+             output = "gt",
              coef_map = c("(Intercept)" = "Intercept",
                           "genderFemale" = "Gender: Female",
                           # "age" = "Age",
@@ -531,32 +532,6 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
   tab_spanner(label = md("**Electoral Democracy**"), columns = 2:5) %>%
   tab_spanner(label = md("**Democratic Indoctrination**"), columns = 6:9) %>%
   tab_footnote(footnote = md("**Source**: SVR-Integrationsbarometer 2022; weighted"))
-
-# Plot
-# (needs refinement)
-modelsummary::modelplot(
-  model.df[model.df$sample == "formative years: 14",]$model$`Random slope`,
-  coef_map = c("(Intercept)" = "Intercept",
-               "genderFemale" = "Gender: Female",
-               "educmittel" = "Education: medium\n(Ref.: low)",
-               "educhoch" = "Educ.: high",
-               "educSchüler" = "Educ.: in school",
-               "timedest" = "Period of residence (Germany)",
-               "timeorig" = "Period of residence (Country of origin)",
-               "muslimMuslim" = "Muslim",
-               "religion_str" = "Religiosity",
-               "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
-               "discriminationhigh" = "Dis.: high",
-               "discriminationvery high" = "Dis.: very high",
-               "v2xed_ed_dmcon" = "Democratic indoctrination (VDem)",
-               "muslimMuslim:religion_str" = "Muslim × Religiosity",
-               # "fhYes" = "Close family (country-of-origin)",
-               # "fhYes:v2x_polyarchy" = "Close family × Polyarchy (VDem)",
-               # "v2x_polyarchy:fh" = "Close family × Polyarchy (VDem)",
-               "timedest:v2xed_ed_dmcon" = "Period of residence (Germany) × DemInd (VDem)",
-               "v2xed_ed_dmcon:timedest" = "Period of residence (Germany) × DemInd (VDem)",
-               "timeorig:v2xed_ed_dmcon" = "Period of residence (CoO) × DemInd (VDem)",
-               "v2xed_ed_dmcon:timeorig" = "Period of residence (CoO) × DemInd (VDem)"))
 
 ### Marginal effects ----
 # Using ggeffects (analogous to marginaleffects::predictions, see below)
@@ -614,10 +589,10 @@ residence_coo_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
 # VDem: Democratic indoctrination
 residence_comb_vind.fig <- residence_vind.pred %>%
   as.data.frame() %>%
-  mutate(where = "Germany") %>%
+  mutate(where = "Country of destination") %>%
   bind_rows(residence_coo_vind.pred %>%
               as.data.frame() %>%
-              mutate(where = "County of origin")) %>%
+              mutate(where = "Country of origin")) %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 
@@ -641,10 +616,10 @@ residence_comb_vind.fig <- lemon::reposition_legend(residence_comb_vind.fig,
 # Residence coo and Germany combined
 residence_comb_vpoly.fig <- residence_vpoly.pred %>%
   as.data.frame() %>%
-  mutate(where = "Germany") %>%
+  mutate(where = "Country of destination") %>%
   bind_rows(residence_coo_vpoly.pred %>%
               as.data.frame() %>%
-              mutate(where = "County of origin")) %>%
+              mutate(where = "Country of origin")) %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 

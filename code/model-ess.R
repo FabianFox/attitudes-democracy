@@ -216,14 +216,14 @@ model.df <- tibble(
       "Interactions",
       "Random slope"), 2),
   iv = c(
-    "1 + (1 | cntry/iso3c)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | cntry/iso3c)",
-    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | cntry/iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | cntry/iso3c)",
-    "1 + (1 | cntry/iso3c)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | cntry/iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | cntry/iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | cntry/iso3c)"),
+    "1 + (1 | iso3c) + (1 | cntry)", 
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | iso3c) + (1 | cntry)",
+    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | iso3c) + (1 | cntry)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | iso3c) + (1 + v2x_polyarchy | cntry)",
+    "1 + (1 | iso3c) + (1 | cntry)", 
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c) + (1 | cntry)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | iso3c) + (1 | cntry)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | iso3c) + (1 + v2xed_ed_dmcon | cntry)"),
   main_iv = c(
     rep("vdem-poly", 4),
     rep("vdem-ind", 4)),
@@ -235,8 +235,7 @@ model.df <- model.df %>%
   mutate(model = pmap(list(dv, iv, data), ~lmer(
     str_c(..1, " ~ ", ..2),
     REML = TRUE,
-    control = lmerControl(optimizer = "optimx", 
-                          optCtrl = list(method = "nlminb")),
+    control = lmerControl(optimizer = "Nelder_Mead"), 
     weights = weight,
     data = eval(rlang::parse_expr(..3)))))
 
@@ -247,6 +246,7 @@ names(model.df$model) <- model.df$type
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
                         models = model.df %>% pull(model),
+                        output = "gt",
                         stars = TRUE,
                         estimate = "{estimate}{stars}",
                         statistic = "({std.error})",
@@ -272,13 +272,14 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                                      "v2x_polyarchy:timeorig" = "Period of residence (CoO) × V-Dem",
                                      "SD (Intercept iso3c)" = "SD (Intercept: CoO)",
                                      "SD (Intercept cntry)" = "SD (Intercept: CoD)",
-                                     "SD (Intercept iso3ccntry)" = "SD (Intercept CoD/CoO)",
-                                     "SD (v2xed_ed_dmcon iso3c)" = "SD (V-Dem CoO)",
-                                     "SD (v2xed_ed_dmcon cntry)" = "SD (V-Dem CoD)",
-                                     "SD (v2xed_ed_dmcon iso3ccntry)" = "SD (V-Dem CoD/CoO)",
                                      "SD (v2x_polyarchy iso3c)" = "SD (V-Dem CoO)",
                                      "SD (v2x_polyarchy cntry)" = "SD (V-Dem CoD)",
-                                     "SD (v2x_polyarchy iso3ccntry)" = "SD (V-Dem CoD/CoO)",
+                                     "SD (v2xed_ed_dmcon iso3c)" = "SD (V-Dem CoO)",
+                                     "SD (v2xed_ed_dmcon cntry)" = "SD (V-Dem CoD)",
+                                     "Cor (Intercept~v2x_polyarchy iso3c)" = "Cor (Intercept~Slope V-Dem CoO)",
+                                     "Cor (Intercept~v2xed_ed_dmcon iso3c)" = "Cor (Intercept~Slope V-Dem CoO)",
+                                     "Cor (Intercept~v2x_polyarchy cntry)" = "Cor (Intercept~Slope V-Dem CoD)",
+                                     "Cor (Intercept~v2xed_ed_dmcon cntry)" = "Cor (Intercept~Slope V-Dem CoD)",
                                      "SD (Observations)" = "SD (Observations)"),
                         gof_map = tribble(
                           ~raw, ~clean, ~fmt,
@@ -341,14 +342,14 @@ residence_coo_vpoly.pred <- ggeffects::ggpredict(model = model.df %>%
                                                            "v2x_polyarchy [0:1 by = 0.25]"),
                                                  type = "fe")
 
-# Residence coo and Germany combined
+# Residence CoO
 # VDem: Democratic indoctrination
 residence_comb_vind.fig <- residence_vind.pred %>%
   as.data.frame() %>%
   mutate(where = "Country of Destination") %>%
   bind_rows(residence_coo_vind.pred %>%
               as.data.frame() %>%
-              mutate(where = "County of origin")) %>%
+              mutate(where = "Country of origin")) %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 
@@ -375,7 +376,7 @@ residence_comb_vpoly.fig <- residence_vpoly.pred %>%
   mutate(where = "Country of destination") %>%
   bind_rows(residence_coo_vpoly.pred %>%
               as.data.frame() %>%
-              mutate(where = "County of origin")) %>%
+              mutate(where = "Country of origin")) %>%
   ggplot(aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high, fill = where, linetype = where)) +
   geom_line() +
   geom_ribbon(alpha = .2) + 

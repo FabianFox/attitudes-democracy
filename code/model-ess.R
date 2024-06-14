@@ -50,7 +50,7 @@ items_democ_ess.gt <- ess_democ.df %>%
   group_by(first_gen = factor(first_gen, 
                               levels = c(1, 0), 
                               labels = c("First-generation", "Non-migrant")), .add = TRUE) %>%
-  reframe(across(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa),
+  reframe(across(c(demo1, fairelc, dfprtal, medcrgv, rghmgpr, cttresa),
                  list(mean = ~wtd.mean(.x, weights = anweight, na.rm = TRUE),
                       sd = ~sqrt(wtd.var(.x, weights = anweight, na.rm = TRUE)),
                       min = ~min(.x, na.rm = TRUE),
@@ -60,6 +60,7 @@ items_democ_ess.gt <- ess_democ.df %>%
                names_sep = "_",
                values_to = "value") %>%
   mutate(variable = case_match(variable,
+                               "demo1" ~ "Democratic values",
                                "fairelc" ~ "Fair elections",
                                "dfprtal" ~ "Party competition",
                                "medcrgv" ~ "Free media",
@@ -293,6 +294,22 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
   tab_spanner(label = md("**Electoral Democracy**"), columns = 2:5) %>%
   tab_spanner(label = md("**Democratic Indoctrination**"), columns = 6:9) %>%
   tab_footnote(footnote = md("**Source**: ESS10; weighted"))
+
+### ICC
+var_icc <- model.df %>% 
+  filter(type == "Unconditional", main_iv == "vdem-poly") %>% 
+  pull(model) %>% 
+  .[[1]] %>% 
+  insight::get_variance()
+
+# iso3c (13.4%)
+icc_iso3 <- var_icc$var.intercept[[1]] / (var_icc$var.residual + var_icc$var.intercept[[1]] + var_icc$var.intercept[[2]])
+
+# cntry (2%)
+icc_cntry <- var_icc$var.intercept[[2]] / (var_icc$var.residual + var_icc$var.intercept[[1]] + var_icc$var.intercept[[2]])
+
+# Total (15%)
+icc_iso3 + icc_cntry
 
 ### Marginal effects ----
 # Using ggeffects (analogous to marginaleffects::predictions, see below)

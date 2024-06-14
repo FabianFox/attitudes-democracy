@@ -83,12 +83,19 @@ ib22_democ.df <- ib22.df %>%
          wandjahr,
          ger_citizen,
          d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst,
+         mgebland, vgebland, s3_sonst, s4_sonst,
          # Transnational contacts
          fh, fhk, fa, fak, fa2_1, fa2_2, fa2_other) %>%
   mutate(
     gebland_chr = as_character(gebland),
     gebland_chr = if_else(gebland_chr == "Anderes Land eingeben", s1_sonst, gebland_chr),
     gebland_chr = str_squish(gebland_chr),
+    mgebland_chr = as_character(mgebland),
+    mgebland_chr = if_else(mgebland_chr == "Anderes Land eingeben", s3_sonst, mgebland_chr),
+    mgebland_chr = str_squish(mgebland_chr),
+    vgebland_chr = as_character(vgebland),
+    vgebland_chr = if_else(vgebland_chr == "Anderes Land eingeben", s4_sonst, vgebland_chr),
+    vgebland_chr = as_character(vgebland),
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
              dlp, dmf, lang_skill, wandjahr, religion, religion_str, discrimination,
              fh, fhk, fa, fak, wandjahr), 
@@ -122,6 +129,52 @@ ib22_democ.df <- ib22_democ.df %>%
                                               "Tuerkei" = "TUR")))
 
 # Join
+# VDem at formative year (age: 14 years, cutoff: age 16)
+ib22_f12year.df <- ib22_democ.df %>%
+  mutate(
+    # Year when individual turned 14
+    formative_year = year(ymd(a_datum)) - age + 12,
+    # Migration before or after turning 14
+    formative_before_mig = case_when(
+      formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 16 --> exclude
+      formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 16 --> include
+      TRUE ~ NA_character_),
+    # Residence year in country of origin since turning 12
+    timeorig = (formative_year - wandjahr) * -1,
+    iso3c = case_when(
+      # former USSR 
+      iso3c == "ARM" & between(formative_year, 1922, 1989) ~ "RUS", # pre 1918 Ottoman Empire but no cases in IB
+      iso3c == "AZE" & between(formative_year, 1900, 1989) ~ "RUS",
+      iso3c == "GEO" & between(formative_year, 1900, 1989) ~ "RUS",
+      iso3c == "KAZ" & between(formative_year, 1900, 1990) ~ "RUS",
+      iso3c == "KGZ" & between(formative_year, 1900, 1989) ~ "RUS",
+      iso3c == "TJK" & between(formative_year, 1900, 1989) ~ "RUS",
+      iso3c == "TKM" & between(formative_year, 1900, 1989) ~ "RUS",
+      iso3c == "UZB" & between(formative_year, 1900, 1989) ~ "RUS",
+      # Bulgaria, Romania, Czechia, Hungary, Poland are coded throughout USSR period
+      iso3c == "BLR" & between(formative_year, 1921, 1989) ~ "RUS",
+      iso3c == "EST" & between(formative_year, 1940, 1989) ~ "RUS",
+      iso3c == "LVA" & between(formative_year, 1940, 1989) ~ "RUS",
+      iso3c == "LTU" & between(formative_year, 1940, 1989) ~ "RUS",
+      iso3c == "MDA" & between(formative_year, 1940, 1989) ~ "RUS",
+      iso3c == "UKR" & between(formative_year, 1941, 1989) ~ "RUS",
+      # former Yugoslavia
+      iso3c == "BIH" & between(formative_year, 1945, 1991) ~ "SRB",
+      iso3c == "XKX" & between(formative_year, 1944, 1998) ~ "SRB",
+      iso3c == "MKD" & between(formative_year, 1912, 1990) ~ "SRB",
+      iso3c == "MNE" & between(formative_year, 1919, 1990) ~ "SRB",
+      iso3c == "HRV" & between(formative_year, 1945, 1990) ~ "SRB",
+      iso3c == "SVN" & between(formative_year, 1945, 1988) ~ "SRB",
+      .default = iso3c),
+    iso3c = case_when(
+      formative_before_mig == "no" ~ "DEU",
+      formative_before_mig == "yes" ~ iso3c,
+      TRUE ~ iso3c)) %>%
+  filter(iso3c != "DEU",
+         formative_before_mig != "no",
+         mgebland_chr != "Deutschland" | vgebland_chr != "Deutschland") %>%
+  left_join(y = vdem.df, by = c("formative_year" = "year", "iso3c" = "country_text_id"))
+
 # VDem at formative year (age: 14 years, cutoff: age 16)
 ib22_f14year.df <- ib22_democ.df %>%
   mutate(
@@ -164,20 +217,21 @@ ib22_f14year.df <- ib22_democ.df %>%
       formative_before_mig == "yes" ~ iso3c,
       TRUE ~ iso3c)) %>%
   filter(iso3c != "DEU",
-         formative_before_mig != "no") %>%
+         formative_before_mig != "no",
+         mgebland_chr != "Deutschland" | vgebland_chr != "Deutschland") %>%
   left_join(y = vdem.df, by = c("formative_year" = "year", "iso3c" = "country_text_id"))
 
-# VDem at formative year (age: 14 years, cutoff: age 17)
-ib22_f17year.df <- ib22_democ.df %>%
+# VDem at formative year (age: 16 years, cutoff: age 18)
+ib22_f16year.df <- ib22_democ.df %>%
   mutate(
     # Year when individual turned 14
-    formative_year = year(ymd(a_datum)) - age + 14,
+    formative_year = year(ymd(a_datum)) - age + 16,
     # Migration before or after turning 17
     formative_before_mig = case_when(
-      formative_year + 3 - wandjahr > 0 ~ "no",   # migrated before turning 17 --> exclude
-      formative_year + 3 - wandjahr <= 0 ~ "yes", # migrated after turning 17 --> include
+      formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 18 --> exclude
+      formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 18 --> include
       TRUE ~ NA_character_),
-    # Residence year in country of origin since turning 14
+    # Residence year in country of origin since turning 16
     timeorig = (formative_year - wandjahr) * -1,
     iso3c = case_when(
       # former USSR 
@@ -209,16 +263,20 @@ ib22_f17year.df <- ib22_democ.df %>%
       formative_before_mig == "yes" ~ iso3c,
       TRUE ~ iso3c)) %>%
   filter(iso3c != "DEU",
-         formative_before_mig != "no") %>%
+         formative_before_mig != "no",
+         mgebland_chr != "Deutschland" | vgebland_chr != "Deutschland") %>%
   left_join(y = vdem.df, by = c("formative_year" = "year", "iso3c" = "country_text_id"))
 
 ## Export ----
 # All respondents
 export(ib22_democ.df, here("data", "ib22_democ.rds"))
 
-# VDem by formative years (cutoff: 16)
+# VDem by formative years (age: 12, cutoff: 14)
+export(ib22_f12year.df, here("data", "ib22_f12year.rds"))
+
+# VDem by formative years (age: 14, cutoff: 16)
 export(ib22_f14year.df, here("data", "ib22_f14year.rds"))
 
-# VDem by formative years (cutoff: 17)
-export(ib22_f17year.df, here("data", "ib22_f17year.rds"))
+# VDem by formative years (age: 16, cutoff: 18)
+export(ib22_f16year.df, here("data", "ib22_f16year.rds"))
 

@@ -17,11 +17,11 @@ extrafont::loadfonts()
 
 # Load data ----
 # ------------------------------------------------------------------------------------------------ #
-ib22_pol.df <- import(here("data", "ib22_pol.rds"))
+ib22_pol.df <- import(here("data", "ib22_democ.rds"))
 
 # Items
 qst.df <- tibble(
-  item = names(ib22_pol.df)[4:17],
+  item = names(ib22_pol.df)[5:18],
   q = c(
     "Gerichte alle Menschen gleich behandeln?",
     "Wahlen zum nationalen Parlament frei und fair sind?",
@@ -164,17 +164,18 @@ scree_plot.fig <- ggplot(scree_plot.df, aes(x = num, y = eigenvalue, shape = typ
 
 ## EFA ----
 efa.df <- ib22_pol.df %>%
-  select(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, dlp, dmf) %>% 
+  select(dgg, dwf, drm, dpu, dme, dra, dmp, dwb, dop, dmk) %>%  #  dgb, drp, dlp, dmf
   drop_na() %>%
   rename_with(~recode(., !!!lookup)) %>%
   nest() %>%
-  expand(nesting(.), factors = 1:10)
+  expand(nesting(.), factors = 1:4)
 
 # Run FAs
 set.seed(2710)
 efa.df <- efa.df %>%
   mutate(efa_result = map2(.x = data, .y = factors, ~fa(
-           .x, nfactors = .y, alpha = .05, fm = "ml", cor = "poly", SMC = FALSE, rotate = "promax",
+           .x, nfactors = .y, alpha = .05, fm = "ml", 
+           cor = "poly", SMC = FALSE, rotate = "promax",
            n.iter = 100)))
 
 # Add fit indices
@@ -215,13 +216,14 @@ efa.df <- efa.df %>%
 # Saved as .rtf then copied and combined in Word
 efa.df %>%
   select(tables, factors) %>%
-  filter(factors == 6) %>%
+  filter(factors == 2) %>%
   pmap(., ~gtsave(..1, filename = str_c("./output/", "FactorAnalysis_", 
                                         ..2, ".rtf")))
 
 # Path diagram
 psych::fa.diagram(efa_pol)
 
+## Reliability ----
 # Latent factors (identified by EFA)
 # 1: dgg, dwf, dgb, drm = Gleichbehandlung & Recht
 # 2: dwb, dop, dmp = Responsivität
@@ -232,10 +234,7 @@ psych::fa.diagram(efa_pol)
 
 # Cronbach's alpha (items determined by EFA)
 scales_fa.df <- tibble(
-  fairness = "dgg$|dwf$|dgb$|drm$",
-  responsiveness = "dwb$|dop$|dmp$",
-  freespeech = "dlp$|dmf$|drp$",
-  econ = "dra$|dme$"
+  general = "dgg$|dwf$|drm$|dpu$|dmk$"
 )
 
 # Cronbach's alpha (subject matter knowledge)
@@ -264,6 +263,28 @@ ib22_pol.df <- ib22_pol.df %>%
     resp_scl = rowMeans(across(c(dwb, dop, dmp)), na.rm = TRUE),
     speech_scl = rowMeans(across(c(dlp, dmf, drp)), na.rm = TRUE)
   )
+
+### Polychoric ----
+scale.poly <- ib22_pol.df %>%
+  select(matches("dgg$|dwf$|drm$|dpu$|dmk$")) %>%
+  drop_na() %>%
+  polychoric()
+
+scale.f1.poly <- ib22_pol.df %>%
+  select(matches("dpu$|dme$|dra$|dmp$|$dwb|dop$")) %>%
+  drop_na() %>%
+  polychoric()
+
+scale.f2.poly <- ib22_pol.df %>%
+  select(matches("dgg$|dwf$|drm$|dmk$")) %>%
+  drop_na() %>%
+  polychoric()
+
+
+# 
+psych::alpha(scale.poly$rho)$total
+psych::alpha(scale.f1.poly$rho)$total
+psych::alpha(scale.f2.poly$rho)$total
 
 # Prob tables of all democracy items 
 # ---------------------------------------------------------------------------- #

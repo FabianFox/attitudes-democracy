@@ -80,6 +80,7 @@ ib22_democ.df <- ib22.df %>%
          state, region,
          # Migration
          mig_gen = geb,
+         refugee = asy01b,
          wandjahr,
          ger_citizen,
          d1_1, d1_2, d1_3, d1_other, gebland, s1_sonst,
@@ -98,8 +99,12 @@ ib22_democ.df <- ib22.df %>%
     vgebland_chr = as_character(vgebland),
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
              dlp, dmf, lang_skill, wandjahr, religion, religion_str, discrimination,
-             fh, fhk, fa, fak, wandjahr), 
+             fh, fhk, fa, fak, wandjahr, refugee), 
            ~replace(., . %in% c(97, 98, 99997, 99998), NA_real_)),
+    refugee = case_when(
+      is.na(refugee) & migra %in% c(1, 2, 4) ~ 2,
+      .default = refugee),
+    refugee = factor(refugee, levels = c(2, 1), labels = c("No", "Yes")),
     # Dichotomize democ items
     across(c(dgg, dwf, dgb, drm, dpu, dme, dra, dmp, dwb, dop, dmk, drp, 
              dlp, dmf), ~case_when(
@@ -129,15 +134,15 @@ ib22_democ.df <- ib22_democ.df %>%
                                               "Tuerkei" = "TUR")))
 
 # Join
-# VDem at formative year (age: 14 years, cutoff: age 16)
+# VDem at formative year (age: 12 years, cutoff: age 14)
 ib22_f12year.df <- ib22_democ.df %>%
   mutate(
-    # Year when individual turned 14
+    # Year when individual turned 12
     formative_year = year(ymd(a_datum)) - age + 12,
-    # Migration before or after turning 14
+    # Migration before or after turning 12
     formative_before_mig = case_when(
-      formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 16 --> exclude
-      formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 16 --> include
+      formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 14 --> exclude
+      formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 14 --> include
       TRUE ~ NA_character_),
     # Residence year in country of origin since turning 12
     timeorig = (formative_year - wandjahr) * -1,
@@ -224,9 +229,9 @@ ib22_f14year.df <- ib22_democ.df %>%
 # VDem at formative year (age: 16 years, cutoff: age 18)
 ib22_f16year.df <- ib22_democ.df %>%
   mutate(
-    # Year when individual turned 14
+    # Year when individual turned 16
     formative_year = year(ymd(a_datum)) - age + 16,
-    # Migration before or after turning 17
+    # Migration before or after turning 18
     formative_before_mig = case_when(
       formative_year + 2 - wandjahr > 0 ~ "no",   # migrated before turning 18 --> exclude
       formative_year + 2 - wandjahr <= 0 ~ "yes", # migrated after turning 18 --> include

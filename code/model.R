@@ -4,8 +4,9 @@
 # Load/install pkgs
 # ------------------------------------------------------------------------------------------------ #
 if(!require("xfun")) install.packages("xfun")
-xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects",
-                  "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", "gtExtras", "patchwork")
+xfun::pkg_attach2("tidyverse", "rio", "hrbrthemes", "fixest", "modelsummary", "marginaleffects", 
+                  "lme4", "CR2", "conflicted", "lubridate", "here", "Cairo", "Hmisc", "gt", 
+                  "gtExtras", "patchwork")
 
 conflicts_prefer(dplyr::filter(),
                  dplyr::select(),
@@ -354,13 +355,144 @@ vdem_cor.tbl <- vdem_cor.df %>%
   tab_source_note(source_note = md("**Source**: SVR-Integrationsbarometer 2022; weighted")) %>%
   fmt_number(decimals = 3)
 
-# Hierachical model ----
+### by VDEM and time ----
+#### Timeorig ----
+# Needs democ_vdem.df, see: line 213ff.
+democ_vdem_timeorig.df <- democ_vdem.df %>%
+  tibble() %>%
+  mutate(timeorig_cut = cut(timeorig, 
+                            breaks = c(seq(0, 30, by = 5), Inf),
+                            labels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30+"),
+                            right = FALSE, include.lowest = TRUE)) 
+
+#### Timedest ----
+democ_vdem_timedest.df <- democ_vdem.df %>%
+  tibble() %>%
+  mutate(timedest_cut = cut(timedest, 
+                            breaks = c(seq(0, 30, by = 5), Inf),
+                            labels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30+"),
+                            right = FALSE, include.lowest = TRUE))
+
+#### Compute ----
+democ_poly_timeorig.df <- democ_vdem_timeorig.df %>%
+  filter(if_all(c(democ, v2x_polyarchy_cut, timeorig_cut, weight), ~!is.na(.x))) %>%
+  summarise(
+    mean = wtd.mean(democ, 
+                    weights = weight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(democ, 
+                                 weights = weight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(democ, 
+                                  weights = weight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2x_polyarchy_cut, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2x_polyarchy_cut)
+
+# Dmcon
+democ_indoc_timeorig.df <- democ_vdem_timeorig.df %>%
+  filter(if_all(c(democ, v2xed_ed_dmcon_cut, timeorig_cut, weight), ~!is.na(.x))) %>%
+  summarise(
+    mean = wtd.mean(democ, 
+                    weights = weight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(democ, 
+                                 weights = weight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(democ, 
+                                  weights = weight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2xed_ed_dmcon_cut, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2xed_ed_dmcon_cut)
+
+# Join
+democ_timeorig.df <- democ_poly_timeorig.df %>%
+  bind_rows(democ_indoc_timeorig.df, .id = "vdem") %>%
+  mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
+  
+##### Plot ---- 
+democ_timeorig.fig <- democ_timeorig.df %>%
+  ggplot(aes(x = timeorig_cut, 
+             y = mean, ymin = conf.low, ymax = conf.high, 
+             group = vdem, colour = vdem)) +
+  geom_pointrange() +
+  geom_line() +
+  facet_wrap(~vdem_qnt) +
+  labs(x = "Residence period in country of origin", y = "Democratic values", 
+       title = "Democratic Values by VDem and Residence Period",
+       colour = "VDem:") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"), 
+        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+
+##### Subsample timeorig: all, timedest >= 5 ----
+# Compute
+# Poly
+democ_poly_timeorig_timedest05.df <- democ_vdem_timeorig.df %>%
+  filter(if_all(c(democ, v2x_polyarchy_cut, timeorig_cut, timedest, weight), ~!is.na(.x)),
+         timedest <= 5) %>%
+  summarise(
+    mean = wtd.mean(democ, 
+                    weights = weight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(democ, 
+                                 weights = weight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(democ, 
+                                  weights = weight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2x_polyarchy_cut, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2x_polyarchy_cut)
+
+# Dmcon
+democ_indoc_timeorig_timedest05.df <- democ_vdem_timeorig.df %>%
+  filter(if_all(c(democ, v2xed_ed_dmcon_cut, timeorig_cut, timedest, weight), ~!is.na(.x)),
+         timedest <= 5) %>%
+  summarise(
+    mean = wtd.mean(democ, 
+                    weights = weight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(democ, 
+                                 weights = weight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(democ, 
+                                  weights = weight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2xed_ed_dmcon_cut, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2xed_ed_dmcon_cut)
+
+# Join
+democ_vdem_timeorig_timedest05.df <- democ_poly_timeorig_timedest05.df %>%
+  bind_rows(y = democ_indoc_timeorig_timedest05.df, .id = "vdem") %>%
+  mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
+
+# Plot
+democ_timeorig_timedest05.fig <- democ_vdem_timeorig_timedest05.df %>%
+  ggplot(aes(x = timeorig_cut, 
+             y = mean, ymin = conf.low, ymax = conf.high, 
+             group = vdem, colour = vdem)) +
+  geom_pointrange() +
+  geom_line() +
+  facet_wrap(~vdem_qnt) +
+  labs(x = "Residence period in country of origin", y = "Democratic values", 
+       title = "Democratic Values by VDem and Residence Period",
+       subtitle = "Respondents with less than five years of residence in country of destination",
+       colour = "VDem:") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"), 
+        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+
+# Hierachical model ---- 
 ### Rescale weights ----
 ib_nest.df <- ib_nest.df %>%
   mutate(data = map(data, ~datawizard::rescale_weights(.x %>% 
                                             filter(if_all(c(iso3c, weight), 
                                                           ~!is.na(.))), 
-                                          group = "iso3c", 
+                                          by = "iso3c", 
                                           probability_weights = "weight")))
 
 ## Run models ----
@@ -373,13 +505,13 @@ model.df <- tibble(
       "Random slope"), 2),
   iv = c(
     "1 + (1 | iso3c)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + (1 | iso3c)",
-    "gender + educ + muslim + religion_str +  + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 | iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + (1 + v2x_polyarchy | iso3c)",
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2x_polyarchy + discrimination + refugee + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + refugee + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2x_polyarchy + timeorig*v2x_polyarchy + refugee + (1 + v2x_polyarchy | iso3c)",
     "1 + (1 | iso3c)", 
-    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + (1 | iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 | iso3c)",
-    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + (1 + v2xed_ed_dmcon | iso3c)"),
+    "gender + educ + timedest + timeorig + muslim + religion_str + v2xed_ed_dmcon + discrimination + refugee + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + refugee + (1 | iso3c)",
+    "gender + educ + muslim + religion_str + discrimination + timedest*v2xed_ed_dmcon + timeorig*v2xed_ed_dmcon + refugee + (1 + v2xed_ed_dmcon | iso3c)"),
   main_iv = c(
     rep("vdem-poly", 4),
     rep("vdem-ind", 4)))
@@ -406,10 +538,15 @@ model.df <- model.df %>%
 # Name list column
 names(model.df$model) <- model.df$type
 
+# Add robust SE using CR2::robust_mixed
+# See: https://francish.net/post/robust-standard-errors/
+model.df <- model.df %>%
+  mutate(robust = map(model, ~robust_mixed(.x, type = "CR0")))
+
 ### Model output ----
 # modelsummary
 mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
-             models = model.df %>% filter(sample == "formative years: 14") %>% pull(model),
+             models = model.df %>% filter(sample == "formative years: 14") %>% pull(model), # pull(robust) for robust SE
              stars = TRUE,
              estimate = "{estimate}{stars}",
              statistic = "({std.error})",
@@ -423,6 +560,7 @@ mlm.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance
                           "timedest" = "Period of residence (Germany)",
                           "timeorig" = "Period of residence (Country of origin)",
                           "muslimMuslim" = "Muslim",
+                          "refugeeYes" = "Refugee",
                           "religion_str" = "Religiosity",
                           "discriminationlow" = "Discrimination: low\n(Ref.: no at all)",
                           "discriminationhigh" = "Dis.: high",
@@ -723,12 +861,12 @@ avg_margins <- avg_slopes(model.df %>%
 ## Main text ----
 # Democratic indoctrination
 ggsave(here("figure", "IB", "residence_x_vdem-ind.png"), plot = residence_comb_vind.fig,
-       dpi = 300, device = ragg::agg_png, background = "white",
+       dpi = 300, device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
 
 # Electoral democracy
 ggsave(here("figure", "IB", "residence_x_vdem-poly.png"), plot = residence_comb_vpoly.fig,
-       dpi = 300, device = ragg::agg_png, background = "white",
+       dpi = 300, device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
 
 # Mean democ index
@@ -737,8 +875,25 @@ gtsave(mean.gt, filename = "./figure/mean_democ.png")
 # Correlation between VDem measures
 gtsave(vdem_cor.tbl, filename = "./figure/VDem-correlation.png")
 
-# MLM results (age 14, cut off: 16)
+# Democ by VDem and Timedest
+# Poly
+ggsave(here("figure", "IB", "residence_vdem_timeorig.png"), plot = democ_timeorig.fig,
+       dpi = 300, device = ragg::agg_png, bg = "white",
+       width = 25, height = 14, units = "cm")
+
+# Poly (timeorig <= 5)
+ggsave(here("figure", "IB", "residence_vdem_timeorig_timedest_below6.png"), 
+       plot = democ_timeorig_timedest05.fig,
+       dpi = 300, device = ragg::agg_png, bg = "white",
+       width = 25, height = 14, units = "cm")
+
+# MLM results (age: 14, cut off: 16)
 gtsave(mlm.tbl, filename = "./figure/IB/MLM_results.rtf")
+
+# MLM results (age: 14, cut off: 16)
+gtsave(mlm.tbl, filename = "./figure/IB/MLM_results_robust.png")
+
+# MLM results, robust SE (age: 14, cut off: 16)
 
 ## Appendix ----
 # Data for reproducibility

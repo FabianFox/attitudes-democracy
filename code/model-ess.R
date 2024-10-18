@@ -208,7 +208,144 @@ vdem_ess_cor.tbl <- vdem_ess_cor.df %>%
   tab_source_note(source_note = md("**Source**: ESS10; weighted")) %>%
   fmt_number(decimals = 3)
 
-# Run models ----
+## by VDEM and time ----
+#### Timeorig ----
+democ_vdem_ess_timeorig.df <- ess_democ.df %>%
+  tibble() %>%
+  filter(first_gen == 1) %>%
+  mutate(
+    timeorig = timeorig - 14, # Count from zero since age 14 (just like in IB analysis)
+    timeorig_cut = cut(timeorig, 
+                       breaks = c(seq(0, 30, by = 5), Inf),
+                       labels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30+"),
+                       right = FALSE, include.lowest = TRUE))
+
+#### Timedest ----
+democ_vdem_ess_timedest.df <- ess_democ.df %>%
+  tibble() %>%
+  filter(first_gen == 1) %>%
+  mutate(
+    timeorig = timeorig - 14, # Count from zero since age 14 (just like in IB analysis))
+    timedest_cut = cut(timedest, 
+                       breaks = c(seq(0, 30, by = 5), Inf),
+                       labels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30+"),
+                       right = FALSE, include.lowest = TRUE))
+
+#### Compute ----
+democ_poly_timeorig_ess.df <- democ_vdem_ess_timeorig.df %>%
+  filter(if_all(c(demo1, v2x_polyarchy_4nat, timeorig_cut, anweight), ~!is.na(.x))) %>%
+  summarise(
+    mean = wtd.mean(demo1, 
+                    weights = anweight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(demo1, 
+                                 weights = anweight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(demo1, 
+                                  weights = anweight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2x_polyarchy_4nat, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2x_polyarchy_4nat)
+
+# Dmcon
+democ_indoc_timeorig_ess.df <- democ_vdem_ess_timeorig.df %>%
+  filter(if_all(c(demo1, v2xed_ed_dmcon_4nat, timeorig_cut, anweight), ~!is.na(.x))) %>%
+  summarise(
+    mean = wtd.mean(demo1, 
+                    weights = anweight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(demo1, 
+                                 weights = anweight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(demo1, 
+                                  weights = anweight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2xed_ed_dmcon_4nat, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2xed_ed_dmcon_4nat)
+
+# Join
+democ_timeorig_ess.df <- democ_poly_timeorig_ess.df %>%
+  bind_rows(democ_indoc_timeorig_ess.df, .id = "vdem") %>%
+  mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
+
+##### Plot ---- 
+democ_timeorig_ess.fig <- democ_timeorig_ess.df %>%
+  ggplot(aes(x = timeorig_cut, 
+             y = mean, ymin = conf.low, ymax = conf.high, 
+             group = vdem, colour = vdem)) +
+  geom_pointrange() +
+  geom_line() +
+  facet_wrap(~vdem_qnt) +
+  labs(x = "Residence period in country of origin", y = "Democratic values", 
+       title = "Democratic Values by VDem and Residence Period",
+       colour = "VDem:") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"), 
+        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+
+##### Subsample timeorig: all, timedest >= 5 ----
+# Compute
+# Poly
+democ_poly_timeorig_timedest05_ess.df <- democ_vdem_ess_timeorig.df %>%
+  filter(if_all(c(demo1, v2x_polyarchy_4nat, timeorig_cut, timedest, anweight), ~!is.na(.x)),
+         timedest <= 5) %>%
+  summarise(
+    mean = wtd.mean(demo1, 
+                    weights = anweight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(demo1, 
+                                 weights = anweight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(demo1, 
+                                  weights = anweight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2x_polyarchy_4nat, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2x_polyarchy_4nat)
+
+# Dmcon
+democ_indoc_timeorig_timedest05_ess.df <- democ_vdem_ess_timeorig.df %>%
+  filter(if_all(c(demo1, v2xed_ed_dmcon_4nat, timeorig_cut, timedest, anweight), ~!is.na(.x)),
+         timedest <= 5) %>%
+  summarise(
+    mean = wtd.mean(demo1, 
+                    weights = anweight,
+                    na.rm = TRUE),
+    conf.low = weighted.ttest.ci(demo1, 
+                                 weights = anweight, 
+                                 conf.level = 0.95)[1],
+    conf.high = weighted.ttest.ci(demo1, 
+                                  weights = anweight, 
+                                  conf.level = 0.95)[2],
+    .by = c(v2xed_ed_dmcon_4nat, timeorig_cut), 
+    n = n()) %>%
+  rename(vdem_qnt = v2xed_ed_dmcon_4nat)
+
+# Join
+democ_vdem_timeorig_timedest05_ess.df <- democ_poly_timeorig_timedest05_ess.df %>%
+  bind_rows(y = democ_indoc_timeorig_timedest05_ess.df, .id = "vdem") %>%
+  mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
+
+# Plot
+democ_timeorig_timedest05_ess.fig <- democ_vdem_timeorig_timedest05_ess.df %>%
+  ggplot(aes(x = timeorig_cut, 
+             y = mean, ymin = conf.low, ymax = conf.high, 
+             group = vdem, colour = vdem)) +
+  geom_pointrange() +
+  geom_line() +
+  facet_wrap(~vdem_qnt) +
+  labs(x = "Residence period in country of origin", y = "Democratic values", 
+       title = "Democratic Values by VDem and Residence Period",
+       subtitle = "Respondents with less than five years of residence in country of destination",
+       colour = "VDem:") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"), 
+        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+
+# Hierarchical modeling ----
+## Run models ----
 model.df <- tibble(
   dv = "democ",
   type = rep(

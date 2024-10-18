@@ -567,6 +567,18 @@ ggsave(here("figure", "ESS", "residence_x_vdem-poly_ess.png"), plot = residence_
        dpi = 300, device = ragg::agg_png(), 
        width = 25, height = 14, units = "cm")
 
+# Democ by VDem and Timedest
+# Poly
+ggsave(here("figure", "ESS", "residence_vdem_timeorig_ess.png"), plot = democ_timeorig_ess.fig,
+       dpi = 300, device = ragg::agg_png, bg = "white",
+       width = 25, height = 14, units = "cm")
+
+# Poly (timeorig <= 5)
+ggsave(here("figure", "ESS", "residence_vdem_timeorig_timedest_below6_ess.png"), 
+       plot = democ_timeorig_timedest05_ess.fig,
+       dpi = 300, device = ragg::agg_png, bg = "white",
+       width = 25, height = 14, units = "cm")
+
 # MLM results
 gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results_ess_weighted.png")
 

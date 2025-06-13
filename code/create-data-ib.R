@@ -11,7 +11,7 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 
 # Load data
-ib22.df <- tibble(import("/Users/fguelzau/Documents/project/svr/data/Integrationsbarometer/IB2022/IB_22_Final_220823.dta", 
+ib22.df <- tibble(import(here("data", "IB_22_Final_220823.dta"), 
                          encoding = "latin1"))
 
 ## Data wrangling ----

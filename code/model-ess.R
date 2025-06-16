@@ -305,7 +305,7 @@ ess_democ_mod.df <- ess_democ.df %>%
   select(gender = gndr, educ = edulvlb, discrimination = discri, religion_str = religiosity, 
          democ = demo1, iso3c = country_text_id, weight = anweight, v2x_polyarchy, v2x_libdem,
          v2x_partipdem, v2xed_ed_dmcon, v2xed_ed_ptcon, v2xed_ptcon, muslim, timedest, timeorig, 
-         cntry, age = agea, year, idno, livecnta, mode) %>%
+         cntry, age = agea, year, idno, livecnta, mode, implvdm, stfdem, fairelcc) %>%
   mutate(
     muslim = factor(muslim, levels = c(0, 1), 
                     labels = c("Other", "Muslim")),
@@ -1358,7 +1358,85 @@ fe.tbl <- modelsummary(models = list(
   stars = T,
   output = "gt")
 
-# Mode effect ----
+## Importance: Living in a democracy ----
+# by first-gen, non-migrant
+democ_importance.df <- ess_democ.df %>%
+  filter(!is.na(implvdm)) %>%
+  mutate(first_gen = factor(first_gen, 
+                            levels = c(1, 0), 
+                            labels = c("First-generation", "Non-migrant"))) %>%
+  count(implvdm, first_gen, wt = anweight) %>%
+  mutate(p = n / sum(n), .by = first_gen)
+
+# Plot
+democ_importance.fig <- democ_importance.df %>%
+  ggplot(aes(x = first_gen, y = p, fill = fct_rev(factor(implvdm, 
+                                                 levels = seq(0, 10, 1),
+                                                 labels = c("0 - Not at all important",
+                                                            seq(1, 9, 1),
+                                                            "10 - Extremely important"))))) +
+  geom_bar(stat = "identity", position = position_stack()) +
+  geom_text(aes(
+    label = ifelse(p >= .05, 
+                   str_replace(as.character(round(p * 100, digit = 1))
+                               , "[.]", ","), "")), 
+    family = "Roboto Condensed", size = 6, colour = "white",
+    position = position_stack(vjust = .5)) +
+  coord_flip() +
+  scale_y_percent() +
+  scico::scale_fill_scico_d(palette = "cork",
+                            guide = guide_legend(reverse = TRUE, nrow = 1)) +
+  labs(x = "", y = "", fill = "") +
+  theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
+  theme(axis.text = element_text(colour = "black"),
+        axis.title.x = element_text(size = 14),
+        strip.text = element_text(size = 14),
+        legend.position = "bottom", 
+        legend.text = element_text(size = 12),
+        legend.justification = "left")
+
+# Table
+democ_importance.tbl <- democ_importance.df %>%
+  mutate(implvdm = factor(implvdm, 
+                          levels = seq(0, 10, 1),
+                          labels = c("0 - Not at all important",
+                                     seq(1, 9, 1),
+                                     "10 - Extremely important"))) %>%
+  select(Importance = implvdm, first_gen, p) %>%
+  pivot_wider(names_from = first_gen, values_from = p) %>%
+  gt::gt() %>%
+  gt::fmt_percent(where(is.numeric))
+
+# Correlation: 
+# - stfdem ("How satisfied with the way democracy works in country") 
+# - implvdm ("How important for you to live in democratically governed country")
+# - fairelcc ("In country national elections are free and fair")
+democ_cor.df <- ess_democ.df %>%
+  mutate(first_gen = factor(first_gen, 
+                            levels = c(1, 0), 
+                            labels = c("First-generation", "Non-migrant"))) %>%
+  select(first_gen, stfdem, implvdm, fairelcc, anweight) %>%
+  na.omit() %>%
+  group_by(first_gen) %>%
+  nest() %>%
+  mutate(cor = map(data, ~collapse::pwcor(X = .[],
+                               use = "pairwise.complete.obs",
+                               w = .x$anweight) %>%
+                     # remove weights
+                     .[-4, -4]))
+           
+# Correlation: stfdem/demo1
+democ_x_stfdem_cor.df <- ess_democ.df %>%
+  mutate(first_gen = factor(first_gen, 
+                            levels = c(1, 0), 
+                            labels = c("First-generation", "Non-migrant"))) %>%
+  select(first_gen, stfdem, demo1, anweight) %>%
+  na.omit() %>%
+  group_by(first_gen) %>%
+  nest() %>%
+  mutate(cor = map(data, ~weights::wtd.cor(.x$stfdem, .x$demo1, weight = .x$anweight))) 
+
+## Mode effect ----
 # Descriptive
 mode_dscr.tbl <- ess_democ.df %>% 
   mutate(mode = sjlabelled::as_character(mode)) %>% 

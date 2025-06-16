@@ -1425,7 +1425,7 @@ democ_cor.df <- ess_democ.df %>%
                      # remove weights
                      .[-4, -4]))
            
-# Correlation: stfdem/demo1
+# Correlation: stfdem/demo1 
 democ_x_stfdem_cor.df <- ess_democ.df %>%
   mutate(first_gen = factor(first_gen, 
                             levels = c(1, 0), 

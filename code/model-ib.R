@@ -317,6 +317,7 @@ dmcon.fig <- democ_vdem.df %>%
 democ_vdem.fig <- poly.fig + dmcon.fig
 
 ##### Single items ----
+# Appendix: Figure 3a
 # Electoral democracy index (v2x_polyarchy)
 poly_item.fig <- democ_vdem.df %>%
   bind_rows(democ_vdem_nonmig.df) %>%
@@ -580,7 +581,7 @@ democ_timeorig.df <- democ_poly_timeorig.df %>%
   mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
   
 ##### Plot ---- 
-# Appendix: Figure 3a
+# Appendix: Figure 4a
 democ_timeorig.fig <- democ_timeorig.df %>%
   ggplot(aes(x = timeorig_cut, 
              y = mean, ymin = conf.low, ymax = conf.high, 
@@ -1466,6 +1467,18 @@ ggsave(here("figure", "IB", "VDem-Development-CoO-Coverage.png"), plot = vdem_ob
        = "cm")
 
 # Figure 3a
+# Single items by VDem
+ggsave(here("figure", "IB", "Single-items-VDEM-Polyarchy_Freqplot-IB.png"), plot = poly_item.fig,
+       dpi = 300, device = ragg::agg_png(), bg = "white",
+       width = 55, height = 20, units = "cm")
+
+# Figure 3b
+ggsave(here("figure", "IB", "Single-items-VDEM-Dmcon_Freqplot-IB.png"), plot = dmcon_item.fig,
+       dpi = 300, device = ragg::agg_png(), bg = "white",
+       width = 55, height = 20, units = "cm")
+
+
+# Figure 4a
 ggsave(here("figure", "IB", "residence_vdem_timeorig.png"), plot = democ_timeorig.fig,
        dpi = 300, device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
@@ -1487,12 +1500,3 @@ gtsave(fe40.tbl, filename = "./figure/IB/Fixed-Effect-Results-Age40.rtf")
 ggsave(here("figure", "IB", "Single-items-Freqplot-IB.png"), plot = demo_items_ib_freqplot.fig,
        dpi = 300, device = ragg::agg_png(), bg = "white",
        width = 50, height = 20, units = "cm")
-
-# Single items by VDem
-ggsave(here("figure", "IB", "Single-items-VDEM-Polyarchy_Freqplot-IB.png"), plot = poly_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
-       width = 55, height = 20, units = "cm")
-
-ggsave(here("figure", "IB", "Single-items-VDEM-Dmcon_Freqplot-IB.png"), plot = dmcon_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
-       width = 55, height = 20, units = "cm")

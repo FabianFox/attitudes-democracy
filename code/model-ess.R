@@ -163,6 +163,7 @@ dmcon_ess.fig <- ess_democ.df %>%
 democ_vdem_ess.fig <- poly_ess.fig + dmcon_ess.fig
 
 ##### Single items ----
+# Appendix: Figure 3c and 3d
 # Electoral democracy index (v2x_polyarchy)
 poly_item.fig <- ess_democ.df %>%
   filter(if_all(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa, v2x_polyarchy_4nat, anweight), ~!is.na(.x))) %>%
@@ -445,7 +446,7 @@ democ_timeorig_ess.df <- democ_poly_timeorig_ess.df %>%
   mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
 
 ##### Plot ---- 
-# Appendix: Figure 3b
+# Appendix: Figure 4b
 democ_timeorig_ess.fig <- democ_timeorig_ess.df %>%
   ggplot(aes(x = timeorig_cut, 
              y = mean, ymin = conf.low, ymax = conf.high, 
@@ -1188,7 +1189,7 @@ residence_comb_vpoly40.fig <- residence_vpoly40.pred %>%
   cowplot::theme_minimal_hgrid() +
   theme(plot.caption = element_text(hjust = 0)) 
 
-##### FE ----
+##### FE (age >= 40) ----
 ###### Create data ----
 # Create a variable that country years under autocracy
 fe40_mod.df <- ess_democ_mod.df %>%
@@ -1264,8 +1265,8 @@ fe40.tbl <- modelsummary(models = list(
   stars = T,
   output = "gt")
 
-# Fixed effect model ----
-## Create data ----
+## Fixed effect model ----
+##### Create data ----
 # Create a variable that country years under autocracy
 fe_mod.df <- ess_democ_mod.df %>%
   nest() %>%
@@ -1298,7 +1299,7 @@ fe_mod.df <- fe_mod.df %>%
   select(-data_long) %>%
   unnest(data)
 
-## Descriptive ----
+##### Descriptive ----
 fe_mod.df %>%
   filter(!is.na(e_v2x_polyarchy_3C_yrs)) %>%
   summarise(mu = wtd.mean(democ, na.rm = T, weights = weight), .by = "e_v2x_polyarchy_3C_yrs",
@@ -1307,7 +1308,7 @@ fe_mod.df %>%
   geom_point(aes(size = n)) +
   geom_smooth(method = "lm")
 
-## Model ---- 
+##### Model ---- 
 fe_mod.df <- fe_mod.df %>%
   nest() %>%
   mutate(
@@ -1436,6 +1437,71 @@ democ_x_stfdem_cor.df <- ess_democ.df %>%
   nest() %>%
   mutate(cor = map(data, ~weights::wtd.cor(.x$stfdem, .x$demo1, weight = .x$anweight))) 
 
+#### Model (importance of democracy) ----
+# Using 'model.df' created earlier
+# adding sample excluding respondents that don't assign importance to living in a democracy
+model_imp_democ.df <- model.df %>%
+  mutate(data = "ess_democ_mod.df %>% filter(implvdm >= 6)")
+
+# Run models
+model_imp_democ.df <- model_imp_democ.df %>%
+  mutate(model = pmap(list(dv, iv, data), ~lme4::lmer(
+    str_c(..1, " ~ ", ..2),
+    REML = TRUE,
+    weights = weight, # or pweights_a
+    data = eval(rlang::parse_expr(..3)))))
+
+# Name list column
+names(model_imp_democ.df$model) <- model_imp_democ.df$type
+
+# modelsummary
+# Appendix: Table 8
+mlm_imp_democ.tbl <- modelsummary(title = md("**Multilevel Regression Model for Importance of Democracy**"),
+                          models = model_imp_democ.df %>% pull(model),
+                          output = "gt",
+                          stars = TRUE,
+                          estimate = "{estimate}{stars}",
+                          statistic = "({std.error})",
+                          coef_map = c("(Intercept)" = "Intercept",
+                                       "genderFemale" = "Gender: Female",
+                                       "educISCED 3" = "Education: ISCED 3\n(Ref.: ISCED 2 and lower)",
+                                       "educISCED 4 and 5A/B short" = "Educ.: ISCED 4 and 5A/B short",
+                                       "educISCED 5 medium and higher" = "Educ.: ISCED 5 medium and higher",
+                                       "timedest_scl" = "Period of residence (Country of destination)",
+                                       "timeorig_scl" = "Period of residence (Country of origin)",
+                                       "muslimMuslim" = "Muslim",
+                                       "religion_str" = "Religiosity",
+                                       "discriminationyes" = "Discrimination: Yes\n(Ref.: No)",
+                                       "v2xed_ed_dmcon_cgm" = "Political socialization (V-Dem) [CGM]",
+                                       "v2x_polyarchy_cgm" = "Political socialization (V-Dem) [CGM]",
+                                       "timedest_scl:v2xed_ed_dmcon_cgm" = "Period of residence (CoD) × V-Dem [CGM]",
+                                       "v2xed_ed_dmcon_cgm:timedest_scl" = "Period of residence (CoD) × V-Dem [CGM]",
+                                       "timeorig_scl:v2xed_ed_dmcon_cgm" = "Period of residence (CoO) × V-Dem [CGM]",
+                                       "v2xed_ed_dmcon_cgm:timeorig_scl" = "Period of residence (CoO) × V-Dem [CGM]",
+                                       "timedest_scl:v2x_polyarchy_cgm" = "Period of residence (CoD) × V-Dem [CGM]",
+                                       "v2x_polyarchy_cgm:timedest_scl" = "Period of residence (CoD) × V-Dem [CGM]",
+                                       "timeorig_scl:v2x_polyarchy_cgm" = "Period of residence (CoO) × V-Dem [CGM]",
+                                       "v2x_polyarchy_cgm:timeorig_scl" = "Period of residence (CoO) × V-Dem [CGM]",
+                                       "SD (Intercept iso3c)" = "SD (Intercept: CoO)",
+                                       "SD (Intercept cntry)" = "SD (Intercept: CoD)",
+                                       "SD (v2x_polyarchy_cgm iso3c)" = "SD (V-Dem by CoO)",
+                                       "SD (v2x_polyarchy_cgm cntry)" = "SD (V-Dem by CoD)",
+                                       "SD (v2xed_ed_dmcon_cgm iso3c)" = "SD (V-Dem by CoO)",
+                                       "SD (v2xed_ed_dmcon_cgm cntry)" = "SD (V-Dem by CoD)",
+                                       "SD (Observations)" = "SD (Observations)"),
+                          gof_map = tribble(
+                            ~raw, ~clean, ~fmt,
+                            "nobs", "N", 0,
+                            "r2,marginal", "R2 Marg.", 3,
+                            "r2.conditional", "R2 Cond.", 3,
+                            "aic", "AIC", 0,
+                            "bic", "BIC", 0,
+                            "icc", "ICC", 2,
+                            "rmse", "RMSE", 2)) %>%
+  tab_spanner(label = md("**Electoral Democracy**"), columns = 2:5) %>%
+  tab_spanner(label = md("**Democratic Indoctrination**"), columns = 6:9) %>%
+  tab_footnote(footnote = md("**Source**: ESS10; weighted"))
+
 ## Mode effect ----
 # Descriptive
 mode_dscr.tbl <- ess_democ.df %>% 
@@ -1517,7 +1583,18 @@ ggsave(here("figure", "ESS", "VDem-Development-CoO-Coverage_ESS.png"), plot = vd
        dpi = 300, device = ragg::agg_png(),
        width = 35, height = 20, units = "cm")
 
-# Figure 3b
+# Figure 3c
+# Single items: Frequency plot
+ggsave(here("figure", "ESS", "Single-Items-Freqplot-Poly-ESS.png"), plot = poly_item.fig,
+       dpi = 300, device = ragg::agg_png(), bg = "white",
+       width = 50, height = 20, units = "cm")
+
+# Figure 3d
+ggsave(here("figure", "ESS", "Single-Items-Freqplot-Dmcon-ESS.png"), plot = dmcon_item.fig,
+       dpi = 300, device = ragg::agg_png(), bg = "white",
+       width = 50, height = 20, units = "cm")
+
+# Figure 4b
 ggsave(here("figure", "ESS", "residence_vdem_timeorig_ess.png"), plot = democ_timeorig_ess.fig,
        dpi = 300, device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
@@ -1530,7 +1607,8 @@ gtsave(mlm12.tbl, filename = "./figure/ESS/MLM_results-Age12.rtf")
 # MLM results (formative years: 16)
 gtsave(mlm16.tbl, filename = "./figure/ESS/MLM_results-Age16.rtf")
 
-# Table 8 (see: )
+# Table 8
+gtsave(mlm_imp_democ.tbl, filename = "./figure/ESS/MLM_result_importance_democracy.rtf")
 
 # Table 9
 gtsave(fe.tbl, filename = "./figure/IB/Fixed-Effect-Results.rtf")

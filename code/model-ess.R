@@ -1564,7 +1564,7 @@ ggsave(here("figure", "ESS", "Democ-boxplot-ESS.png"), plot = demo_boxplot_ess.f
 # Table 2b
 gtsave(items_democ_ess.gt, filename = here("figure", "ESS", "Demo-items.rtf"))
 
-# Table 2c (see: )
+# Table 2c
 
 # Table 3c
 gtsave(items_democ_poly_ess.gt, filename = here("figure", "ESS", "Demo-VDem-Poly_ESS.rtf"))

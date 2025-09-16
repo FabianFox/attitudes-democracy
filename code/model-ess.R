@@ -55,7 +55,9 @@ demo_boxplot_ess.fig <- ess_democ.df %>%
   ggplot(aes(x = first_gen, y = demo1, weight = anweight)) +
   geom_boxplot() +
   coord_flip() +
-  labs(x = "", y = "Democratic Values", title = "") +
+  labs(title = "Figure A1b. Democratic values among non-migrants and first-generation migrants, weighted IB data",
+       x = "", 
+       y = "Democratic Values") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"))
 
@@ -163,7 +165,7 @@ dmcon_ess.fig <- ess_democ.df %>%
 democ_vdem_ess.fig <- poly_ess.fig + dmcon_ess.fig
 
 ##### Single items ----
-# Appendix: Figure 3c and 3d
+# Appendix: Figure A3c and A3d
 # Electoral democracy index (v2x_polyarchy)
 poly_item.fig <- ess_democ.df %>%
   filter(if_all(c(fairelc, dfprtal, medcrgv, rghmgpr, cttresa, v2x_polyarchy_4nat, anweight), ~!is.na(.x))) %>%
@@ -198,7 +200,8 @@ poly_item.fig <- ess_democ.df %>%
   scico::scale_fill_scico_d(palette = "cork",
                             guide = guide_legend(reverse = TRUE, nrow = 1)) +
   scale_x_percent() +
-  labs(x = "", y = "", fill = "") +
+  labs(title = "Figure A3c. Democratic Values by Electoral Democracy, Weighted ESS Data",
+       x = "", y = "", fill = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"),
         axis.title.x = element_text(size = 14),
@@ -241,7 +244,8 @@ dmcon_item.fig <- ess_democ.df %>%
   scico::scale_fill_scico_d(palette = "cork",
                             guide = guide_legend(reverse = TRUE, nrow = 1)) +
   scale_x_percent() +
-  labs(x = "", y = "", fill = "") +
+  labs(title = "Figure A3d. Democratic Values by Democratic Indoctrincation, Weighted ESS Data",
+       x = "", y = "", fill = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"),
         axis.title.x = element_text(size = 14),
@@ -446,7 +450,7 @@ democ_timeorig_ess.df <- democ_poly_timeorig_ess.df %>%
   mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
 
 ##### Plot ---- 
-# Appendix: Figure 4b
+# Appendix: Figure A4b
 democ_timeorig_ess.fig <- democ_timeorig_ess.df %>%
   ggplot(aes(x = timeorig_cut, 
              y = mean, ymin = conf.low, ymax = conf.high, 
@@ -454,11 +458,12 @@ democ_timeorig_ess.fig <- democ_timeorig_ess.df %>%
   geom_pointrange() +
   geom_line() +
   facet_wrap(~vdem_qnt) +
-  labs(x = "Residence period in country of origin", y = "Democratic values", 
-       title = "Democratic Values by V-Dem and Residence Period",
+  labs(x = "Residence Period in Country of Origin", y = "Democratic Values", 
+       title = "Figure A4b. Democratic Values by Electoral Democracy and Democratic Indoctrination\nby Residence Period in the Country of Origin, Weighted ESS Data",
        colour = "V-Dem:") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"), 
+        legend.position = "bottom",
         axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
 
 ##### Subsample timeorig: all, timedest >= 5 ----
@@ -521,7 +526,7 @@ democ_timeorig_timedest05_ess.fig <- democ_vdem_timeorig_timedest05_ess.df %>%
         axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
 
 #### VDem over time and CoO ----
-# Appendix: Figure 2b
+# Appendix: Figure A2b
 # Electoral democracy index (v2x_polyarchy)
 vdem_obs_poly_ess.fig <- ess_democ_mod.df %>%
   ggplot(aes(x = year, y = v2x_polyarchy, fill = iso3c)) +
@@ -536,7 +541,7 @@ vdem_obs_poly_ess.fig <- ess_democ_mod.df %>%
                aes(group = 1), fun = mean, geom = "line", color = "#F8766D", linewidth = 1) +
   scale_x_continuous(breaks = seq(1940, 2020, by = 20), limits = c(1941, 2020)) +
   scale_y_continuous(breaks = seq(0, 1, .25), limits = c(0, 1)) +
-  labs(title = "Electoral Democracy over time", 
+  labs(title = "Electoral Democracy Over Time", 
        subtitle = "", 
        x = "", y = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
@@ -568,7 +573,7 @@ vdem_obs_indoc_ess.fig <- ess_democ_mod.df %>%
                aes(group = 1), fun = mean, geom = "line", color = "#F8766D", linewidth = 1) +
   scale_x_continuous(breaks = seq(1940, 2020, by = 20), limits = c(1940, 2020)) +
   scale_y_continuous(breaks = seq(0, 1, .25), limits = c(0, 1)) +
-  labs(title = "Democratic indoctrination over time", 
+  labs(title = "Democratic Indoctrination Over Time", 
        subtitle = "", 
        x = "", y = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
@@ -590,7 +595,7 @@ countries_covered_ess.map <- ggplot() +
   geom_sf(data = wmap_ess.sf[!wmap_ess.sf$CNTR_NAME == "Antarctica",], aes(fill = covered_in_ess)) +
   scale_fill_manual(values = c("included" = "#00BFC4", "not included" = "#F8766D")) +
   coord_sf(crs = sf::st_crs("EPSG:3857")) +
-  labs(title = "Covered countries of origin", fill = "") +
+  labs(title = "Covered Countries of Origin", fill = "") +
   cowplot::theme_map() +
   theme(legend.position = "bottom")
 
@@ -598,7 +603,8 @@ countries_covered_ess.map <- ggplot() +
 vdem_obs_dev_ess.fig <- vdem_obs_poly_ess.fig | vdem_obs_indoc_ess.fig | countries_covered_ess.map
 
 # Add Panel tags
-vdem_obs_dev_ess.fig <- vdem_obs_dev_ess.fig + plot_annotation(tag_levels = 'A')
+vdem_obs_dev_ess.fig <- vdem_obs_dev_ess.fig + plot_annotation(title = "Figure A2b. Electoral Democracy and Democratic Indoctrination in Countries of Origin, ESS Data", tag_levels = 'A') & 
+  theme(plot.title = element_text(size = 20, family = "Roboto Condensed", face = "bold"))
 
 # Hierarchical modeling ----
 ess_democ_mod.df <- ess_democ_mod.df %>%
@@ -791,8 +797,7 @@ residence_comb_vind.fig <- residence_vind.pred %>%
   geom_ribbon(alpha = .2) + 
   scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10)) +
   scale_y_continuous(breaks = seq(7.5, 9.5, .5), labels = seq(7.5, 9.5, .5)) +
-  labs(title = 
-         "Predicted democratic values by residence period and democratic indoctrination", 
+  labs(title = "Figure 4b. Predicted Democratic Values by Residence Period and Democratic Indoctrination", 
        subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: ESS Wave 10; weighted data",
        x = "", y = "", 
@@ -815,8 +820,7 @@ residence_comb_vpoly.fig <- residence_vpoly.pred %>%
   geom_ribbon(alpha = .2) + 
   scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10)) +
   scale_y_continuous(breaks = seq(7.5, 9.5, .5), labels = seq(7.5, 9.5, .5)) +
-  labs(title = 
-         "Predicted democratic values by residence period and electoral democracy", 
+  labs(title = "Figure 4a. Predicted Democratic Values by Residence Period and Electoral Democracy", 
        subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: ESS Wave 10; weighted data",
        x = "", y = "", 
@@ -1535,8 +1539,8 @@ mode.tbl <- ess_democ_mod.df %>%
 # Export ----
 ## Main text ----
 # Figure 2
-ggsave(here("figure", "ESS", "Fig2-democ_by_vdem_ess.png"), plot = democ_vdem_ess.fig,
-       dpi = "retina", device = ragg::agg_png(),
+ggsave(here("figure", "ESS", "Figure2_Box_plots_democratic_values_by_vdem-ESS.png"), plot = democ_vdem_ess.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
        width = 25, height = 15, units = "cm")
 
 # Table 2
@@ -1545,21 +1549,21 @@ gtsave(mlm.tbl, filename = "./figure/ESS/MLM_results.rtf")
 
 # Figure 4a
 # Electoral democracy
-ggsave(here("figure", "ESS", "Fig4a-residence_x_vdem-poly_ess.png"), plot = residence_comb_vpoly.fig,
-       dpi = "retina", device = ragg::agg_png(), 
-       width = 25, height = 14, units = "cm")
+ggsave(here("figure", "ESS", "Figure4a_Predicted_Democratic_Values_Residence_Period_Electoral_Democracy-ESS.png"), plot = residence_comb_vpoly.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
+       width = 28, height = 14, units = "cm")
 
 # Figure 4b
 # Democratic indoctrination
-ggsave(here("figure", "ESS", "Fig4b-residence_x_vdem-ind_ess.png"), plot = residence_comb_vind.fig,
-       dpi = "retina", device = ragg::agg_png(), 
-       width = 25, height = 14, units = "cm")
+ggsave(here("figure", "ESS", "Figure4b_Predicted_Democratic_Values_Residence_Period_Democratic_Indoctrination-ESS.png"), plot = residence_comb_vind.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
+       width = 28, height = 14, units = "cm")
 
 ## Appendix ----
-# Figure 1b
-ggsave(here("figure", "ESS", "Democ-boxplot-ESS.png"), plot = demo_boxplot_ess.fig,
-       dpi = 300, device = ragg::agg_png(),
-       width = 25, height = 15, units = "cm")
+# Figure A1b
+ggsave(here("figure", "ESS", "FigureA1b_Democratic_values-ESS.png"), plot = demo_boxplot_ess.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
+       width = 32, height = 15, units = "cm")
 
 # Table 2b
 gtsave(items_democ_ess.gt, filename = here("figure", "ESS", "Demo-items.rtf"))
@@ -1578,25 +1582,26 @@ gtsave(vdem_ess_cor.tbl, filename = here("figure", "ESS", "VDem-Correlation_ESS.
 # Table 6
 gtsave(ess_predictors.tbl, filename = here("figure", "ESS", "Overview-Predictors_ESS.rtf"))
 
-# Figure 2b
-ggsave(here("figure", "ESS", "VDem-Development-CoO-Coverage_ESS.png"), plot = vdem_obs_dev_ess.fig,
-       dpi = 300, device = ragg::agg_png(),
-       width = 35, height = 20, units = "cm")
+# Figure A2b
+ggsave(here("figure", "ESS", "FigureA2b_VDem_in:Countries_of_Origin-ESS.png"), plot = vdem_obs_dev_ess.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
+       width = 40, height = 20, units = "cm")
 
 # Figure 3c
 # Single items: Frequency plot
-ggsave(here("figure", "ESS", "Single-Items-Freqplot-Poly-ESS.png"), plot = poly_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
+ggsave(here("figure", "ESS", "FigureA3c_Democratic_Values_Electoral_Democracy-ESS.png"), 
+       plot = poly_item.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
        width = 50, height = 20, units = "cm")
 
 # Figure 3d
-ggsave(here("figure", "ESS", "Single-Items-Freqplot-Dmcon-ESS.png"), plot = dmcon_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
+ggsave(here("figure", "ESS", "FigureA3d_Democratic_Values_Democratic_Indoctrination-ESS.png"), plot = dmcon_item.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
        width = 50, height = 20, units = "cm")
 
-# Figure 4b
-ggsave(here("figure", "ESS", "residence_vdem_timeorig_ess.png"), plot = democ_timeorig_ess.fig,
-       dpi = 300, device = ragg::agg_png, bg = "white",
+# Figure A4b
+ggsave(here("figure", "ESS", "FigureA4b_Democratic_Values_VDem-ESS.png"), plot = democ_timeorig_ess.fig,
+       dpi = "retina", device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
 
 # Table 7c

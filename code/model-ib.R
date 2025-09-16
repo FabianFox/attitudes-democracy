@@ -161,7 +161,7 @@ mean.gt <- mean.tbl %>%
               columns = c("mean", "95%CI")) %>%
   tab_spanner(label = "95")  
 
-### Boxplot (App.: Fig. 1a) ----
+### Boxplot (App.: Fig. A1a) ----
 demo_boxplot_ib.fig <- ib_nest.df %>%
   filter(sample == "total") %>%
   pull(data) %>%
@@ -351,7 +351,9 @@ poly_item.fig <- democ_vdem.df %>%
   scico::scale_fill_scico_d(palette = "cork",
                             guide = guide_legend(reverse = TRUE)) +
   scale_x_percent() +
-  labs(x = "", y = "", fill = "") +
+  labs(
+    title = "Figure A3a. Democratic Values by Electoral Democracy, Weighted IB Data",
+    x = "", y = "", fill = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"),
         axis.title.x = element_text(size = 14),
@@ -393,7 +395,9 @@ dmcon_item.fig <- democ_vdem.df %>%
   scico::scale_fill_scico_d(palette = "cork",
                             guide = guide_legend(reverse = TRUE)) +
   scale_x_percent() +
-  labs(x = "", y = "", fill = "") +
+  labs(
+    title = "Figure A3b. Democratic Values by Democratic Indoctrination, Weighted IB Data",
+    x = "", y = "", fill = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"),
         axis.title.x = element_text(size = 14),
@@ -581,7 +585,7 @@ democ_timeorig.df <- democ_poly_timeorig.df %>%
   mutate(vdem = if_else(vdem == 1, "Electoral Democracy", "Democratic Indoctrination"))
   
 ##### Plot ---- 
-# Appendix: Figure 4a
+# Appendix: Figure A4a
 democ_timeorig.fig <- democ_timeorig.df %>%
   ggplot(aes(x = timeorig_cut, 
              y = mean, ymin = conf.low, ymax = conf.high, 
@@ -590,11 +594,12 @@ democ_timeorig.fig <- democ_timeorig.df %>%
   geom_line() +
   facet_wrap(~vdem_qnt) +
   labs(x = "Residence period in country of origin", y = "Democratic values", 
-       title = "Democratic Values by V-Dem and Residence Period",
+       title = "Figure A4a. Democratic Values by Electoral Democracy and Democratic Indoctrination\nby Residence Period in the Country of Origin, Weighted IB Data",
        colour = "V-Dem:") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
   theme(axis.text = element_text(colour = "black"), 
-        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+        axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5),
+        legend.position = "bottom")
 
 ##### Subsample timeorig: all, timedest >= 5 ----
 # Compute
@@ -656,7 +661,7 @@ democ_timeorig_timedest05.fig <- democ_vdem_timeorig_timedest05.df %>%
         axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
 
 #### VDem over time and CoO ----
-# Appendix: Figure 2a
+# Appendix: Figure A2a
 # Electoral democracy index (v2x_polyarchy)
 vdem_obs_poly.fig <- ib_nest.df %>%
   filter(sample == "formative years: 14") %>%
@@ -673,7 +678,7 @@ vdem_obs_poly.fig <- ib_nest.df %>%
                aes(group = 1), fun = mean, geom = "line", color = "#F8766D", linewidth = 1) +
   scale_x_continuous(breaks = seq(1940, 2020, by = 20)) +
   scale_y_continuous(breaks = seq(0, 1, .25), limits = c(0, 1)) +
-  labs(title = "Electoral Democracy over time", 
+  labs(title = "Electoral Democracy Over Time", 
        subtitle = "", 
        x = "", y = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
@@ -710,7 +715,7 @@ vdem_obs_indoc.fig <- ib_nest.df %>%
                aes(group = 1), fun = mean, geom = "line", color = "#F8766D", linewidth = 1) +
   scale_x_continuous(breaks = seq(1940, 2020, by = 20)) +
   scale_y_continuous(breaks = seq(0, 1, .25), limits = c(0, 1)) +
-  labs(title = "Democratic indoctrination over time", 
+  labs(title = "Democratic Indoctrination Over Time", 
        subtitle = "", 
        x = "", y = "") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
@@ -733,7 +738,7 @@ countries_covered.map <- ggplot() +
   geom_sf(data = wmap.sf[!wmap.sf$CNTR_NAME == "Antarctica",], aes(fill = covered_in_ib)) +
   scale_fill_manual(values = c("included" = "#00BFC4", "not included" = "#F8766D")) +
   coord_sf(crs = sf::st_crs("EPSG:3857")) +
-  labs(title = "Covered countries of origin", fill = "") +
+  labs(title = "Covered Countries of Origin", fill = "") +
   cowplot::theme_map() +
   theme(legend.position = "bottom")
 
@@ -741,7 +746,8 @@ countries_covered.map <- ggplot() +
 vdem_obs_dev_ib.fig <- vdem_obs_poly.fig | vdem_obs_indoc.fig | countries_covered.map
 
 # Add Panel tags
-vdem_obs_dev_ib.fig <- vdem_obs_dev_ib.fig + plot_annotation(tag_levels = 'A')
+vdem_obs_dev_ib.fig <- vdem_obs_dev_ib.fig + plot_annotation(title = "Figure A2a. Electoral Democracy and Democratic Indoctrination in Countries of Origin, IB Data", tag_levels = 'A') & 
+  theme(plot.title = element_text(size = 20, family = "Roboto Condensed", face = "bold"))
 
 # Hierachical model ---- 
 ### Centering predictors
@@ -954,7 +960,7 @@ residence_comb_vpoly.fig <- residence_vpoly.pred %>%
   scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10)) +
   scale_y_continuous(limits = c(2.0, 3.5), breaks = seq(2.0, 3.0, .2), labels = seq(2.0, 3.0, 0.2)) +
   labs(title = 
-         "Predicted democratic values by residence period and electoral democracy", 
+         "Figure 3a. Predicted Democratic Values by Residence Period and Electoral Democracy", 
        subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "", 
@@ -978,7 +984,7 @@ residence_comb_vind.fig <- residence_vind.pred %>%
   scale_x_continuous(breaks = seq(0, 60, 10), labels = seq(0, 60, 10)) +
   scale_y_continuous(limits = c(2, 3.5), breaks = seq(2.0, 3.0, .2), labels = seq(2.0, 3.0, 0.2)) +
   labs(title = 
-         "Predicted democratic values by residence period and democratic indoctrination", 
+         "Figure 3b. Predicted Democratic Values by Residence Period and Democratic Indoctrination", 
        subtitle = "Holding covariates constant (at mean or reference category)",
        caption = "Source: Integration Barometer 2022; weighted data",
        x = "", y = "", 
@@ -1419,31 +1425,31 @@ fe40.tbl <- modelsummary(models = list(
 # Export ----
 ## Main text ----
 # Figure 1
-ggsave(here("figure", "IB", "Fig1-Boxplot-VDem.png"), plot = democ_vdem.fig,
+ggsave(here("figure", "IB", "Figure1_Box_plots_democratic_values_by_vdem-IB.png"), plot = democ_vdem.fig,
        dpi = "retina", device = ragg::agg_png, bg = "white",
-       width = 25, height = 14, units = "cm")
+       width = 25, height = 15, units = "cm")
 
 # Figure 3a
 # Electoral democracy
-ggsave(here("figure", "IB", "Fig3a-residence_x_vdem-poly.png"), plot = residence_comb_vpoly.fig,
-       dpi = 300, device = ragg::agg_png, bg = "white",
-       width = 25, height = 14, units = "cm")
+ggsave(here("figure", "IB", "Figure3a_Predicted_Democratic_Values_Residence_Period_Electoral_Democracy-IB.png"), plot = residence_comb_vpoly.fig,
+       dpi = "retina", device = ragg::agg_png, bg = "white",
+       width = 28, height = 14, units = "cm")
 
 # Figure 3b
 # Democratic indoctrination
-ggsave(here("figure", "IB", "Fig3b-residence_x_vdem-ind.png"), plot = residence_comb_vind.fig,
-       dpi = 300, device = ragg::agg_png, bg = "white",
-       width = 25, height = 14, units = "cm")
+ggsave(here("figure", "IB", "Figure3b_Predicted_Democratic_Values_Residence_Period_Democratic_Indoctrination-IB.png"), plot = residence_comb_vind.fig,
+       dpi = "retina", device = ragg::agg_png, bg = "white",
+       width = 28, height = 14, units = "cm")
 
 # Table 1
 # MLM results (age: 14, cut off: 16)
 gtsave(mlm.tbl, filename = "./figure/IB/MLM_results.rtf")
 
 ## Appendix ----
-# Figure 1a
-ggsave(here("figure", "IB", "Democ-boxplot-IB.png"), plot = demo_boxplot_ib.fig,
-       dpi = 300, device = ragg::agg_png(),
-       width = 25, height = 15, units = "cm")
+# Figure A1a
+ggsave(here("figure", "IB", "FigureA1a_Democratic_values-IB.png"), plot = demo_boxplot_ib.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
+       width = 32, height = 15, units = "cm")
 
 # Table 2a
 gtsave(items_democ.gt, filename = here("figure", "IB", "Demo-items_IB.rtf"))
@@ -1460,27 +1466,25 @@ gtsave(vdem_cor.tbl, filename = "./figure/VDem-correlation.png")
 # Table 6 (left panel: Integration Barometer)
 gtsave(ib_predictors.tbl, filename = here("figure", "IB", "Overview-Predictors_IB.rtf"))
 
-# Figure 2a
-ggsave(here("figure", "IB", "VDem-Development-CoO-Coverage.png"), plot = vdem_obs_dev_ib.fig,
-       dpi = 300, device = ragg::agg_png(),
-       width = 35, height = 20, units
-       = "cm")
+# Figure A2a
+ggsave(here("figure", "IB", "FigureA2a_VDem_in_Countries_of_Origin-IB.png"), plot = vdem_obs_dev_ib.fig,
+       dpi = "retina", device = ragg::agg_png(),
+       width = 40, height = 20, units = "cm")
 
-# Figure 3a
+# Figure A3a
 # Single items by VDem
-ggsave(here("figure", "IB", "Single-items-VDEM-Polyarchy_Freqplot-IB.png"), plot = poly_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
+ggsave(here("figure", "IB", "FigureA3a_Democratic_Values_Electoral_Democracy-IB.png"), plot = poly_item.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
        width = 55, height = 20, units = "cm")
 
-# Figure 3b
-ggsave(here("figure", "IB", "Single-items-VDEM-Dmcon_Freqplot-IB.png"), plot = dmcon_item.fig,
-       dpi = 300, device = ragg::agg_png(), bg = "white",
+# Figure A3b
+ggsave(here("figure", "IB", "FigureA3b_Democratic_Values_Democratic_Indoctrination-IB.png"), plot = dmcon_item.fig,
+       dpi = "retina", device = ragg::agg_png(), bg = "white",
        width = 55, height = 20, units = "cm")
 
-
-# Figure 4a
-ggsave(here("figure", "IB", "residence_vdem_timeorig.png"), plot = democ_timeorig.fig,
-       dpi = 300, device = ragg::agg_png, bg = "white",
+# Figure A4a
+ggsave(here("figure", "IB", "FigureA4a_Democratic_Values_VDem-ESS-IB.png"), plot = democ_timeorig.fig,
+       dpi = "retina", device = ragg::agg_png, bg = "white",
        width = 25, height = 14, units = "cm")
 
 # Table 7a

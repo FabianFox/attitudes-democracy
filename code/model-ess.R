@@ -55,7 +55,7 @@ demo_boxplot_ess.fig <- ess_democ.df %>%
   ggplot(aes(x = first_gen, y = demo1, weight = anweight)) +
   geom_boxplot() +
   coord_flip() +
-  labs(title = "Figure A1b. Democratic values among non-migrants and first-generation migrants, weighted IB data",
+  labs(title = "Figure A1b. Democratic values among non-migrants and first-generation migrants, weighted ESS data",
        x = "", 
        y = "Democratic Values") +
   theme_ipsum(base_family = "Roboto Condensed", base_size = 14) +
